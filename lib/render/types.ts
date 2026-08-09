@@ -1,3 +1,6 @@
+import type { LookId } from "./looks";
+import type { ThemeId } from "./themes";
+
 export type FormatId = "pfp" | "card";
 
 export type FormatSpec = {
@@ -51,10 +54,22 @@ export type Details = {
   stack: string;
   handle: string;
   title: string;
+  /**
+   * Where this pass's QR points. Allocated before render, not after upload —
+   * the code has to be baked into the image itself, so the id it encodes must
+   * exist before the image is made.
+   */
+  shareUrl: string;
 };
+
+/** Which face of the builder ID is showing. The profile frame has one side. */
+export type CardSide = "front" | "back";
 
 export type RenderState = {
   bitmap: ImageBitmap | null;
   transform: Transform;
   details: Details;
+  theme: ThemeId;
+  look: LookId;
+  side: CardSide;
 };

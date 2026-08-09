@@ -1,5 +1,6 @@
 import { DISPLAY, font } from "../fonts";
-import { C, EVENT, label, wordmark } from "./brand";
+import { EVENT, label, wordmark } from "./brand";
+import { THEMES } from "./themes";
 
 /**
  * 1200 x 630 preview for the tool's own URL.
@@ -19,7 +20,7 @@ export function renderPromo(
 ): void {
   ctx.clearRect(0, 0, W, H);
 
-  ctx.fillStyle = C.green;
+  ctx.fillStyle = THEMES.sunset.base;
   ctx.fillRect(0, 0, W, H);
 
   const g = ctx.createLinearGradient(0, 0, W, H);
@@ -49,7 +50,7 @@ export function renderPromo(
 
   ctx.save();
   ctx.font = font(800, 58, DISPLAY, "Georgia, serif");
-  ctx.fillStyle = C.cream;
+  ctx.fillStyle = THEMES.sunset.ink;
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
   ctx.fillText("LESS NOISE.", x, 332);
@@ -72,7 +73,7 @@ export function renderPromo(
   });
 
   label(ctx, EVENT.hashtag, x, 534, 21, {
-    fill: C.yellow,
+    fill: THEMES.sunset.mark,
     weight: 600,
     tracking: 2.2,
   });

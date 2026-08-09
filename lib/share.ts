@@ -74,11 +74,12 @@ export type UploadResult = { id: string; pageUrl: string; imageUrl: string };
 export async function uploadForShare(
   image: Blob,
   ogImage: Blob,
-  meta: { name?: string; title?: string },
+  meta: { id?: string; name?: string; title?: string },
 ): Promise<UploadResult> {
   const body = new FormData();
   body.append("image", image, "image.jpg");
   body.append("og", ogImage, "og.jpg");
+  if (meta.id) body.append("id", meta.id);
   if (meta.name) body.append("name", meta.name);
   if (meta.title) body.append("title", meta.title);
 

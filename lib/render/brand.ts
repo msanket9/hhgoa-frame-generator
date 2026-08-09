@@ -5,19 +5,10 @@
  * here, inside the thing the user actually posts.
  */
 
-import { DEVANAGARI, DISPLAY, MONO, font } from "../fonts";
+import qrcode from "qrcode-generator";
 
-export const C = {
-  green: "#0b4b2c",
-  greenDeep: "#073620",
-  cream: "#f7f3e8",
-  yellow: "#ffd400",
-  pink: "#ff1f6b",
-  orange: "#e8622c",
-  gold: "#f9a825",
-  ink: "#10241a",
-  white: "#ffffff",
-} as const;
+import { DEVANAGARI, DISPLAY, MONO, font } from "../fonts";
+import { THEMES, type Palette } from "./themes";
 
 export const EVENT = {
   name: "HACKER HOUSE",
@@ -35,33 +26,36 @@ export const EVENT = {
  * the sequence the sky actually runs at Arambol, and the through-line that
  * makes the ring, the sun disc and the card accents read as one system.
  */
-export function sunsetGradient(
+export function rampLinear(
   ctx: CanvasRenderingContext2D,
+  palette: Palette,
   x0: number,
   y0: number,
   x1: number,
   y1: number,
 ): CanvasGradient {
   const g = ctx.createLinearGradient(x0, y0, x1, y1);
-  g.addColorStop(0, C.pink);
-  g.addColorStop(0.45, C.orange);
-  g.addColorStop(1, C.gold);
+  g.addColorStop(0, palette.ramp[0]);
+  g.addColorStop(0.45, palette.ramp[1]);
+  g.addColorStop(1, palette.ramp[2]);
   return g;
 }
 
 /** Conic variant so a ring picks up the full ramp as it goes around. */
-export function sunsetConic(
+export function rampConic(
   ctx: CanvasRenderingContext2D,
+  palette: Palette,
   cx: number,
   cy: number,
   rotation = -Math.PI / 2,
 ): CanvasGradient {
+  const [a, b, c] = palette.ramp;
   const g = ctx.createConicGradient(rotation, cx, cy);
-  g.addColorStop(0, C.gold);
-  g.addColorStop(0.25, C.orange);
-  g.addColorStop(0.5, C.pink);
-  g.addColorStop(0.75, C.orange);
-  g.addColorStop(1, C.gold);
+  g.addColorStop(0, c);
+  g.addColorStop(0.25, b);
+  g.addColorStop(0.5, a);
+  g.addColorStop(0.75, b);
+  g.addColorStop(1, c);
   return g;
 }
 
@@ -85,6 +79,17 @@ export function roundRect(
  * glyph plus half the next, which keeps the spacing optically even instead of
  * bunching on wide letters.
  */
+/** Applies an alpha to a hex colour; passes rgba() through untouched. */
+export function withAlpha(colour: string, alpha: number): string {
+  if (!colour.startsWith("#")) return colour;
+  const hex = colour.slice(1);
+  const n =
+    hex.length === 3
+      ? hex.split("").map((c) => parseInt(c + c, 16))
+      : [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16));
+  return `rgba(${n[0]}, ${n[1]}, ${n[2]}, ${alpha})`;
+}
+
 export const DEVANAGARI_RANGE = /[ऀ-ॿ]/;
 
 /**
@@ -206,9 +211,9 @@ export function sunDisc(
   cx: number,
   cy: number,
   r: number,
-  opts: { rays?: boolean; ringColor?: string } = {},
+  opts: { rays?: boolean; ringColor?: string; palette?: Palette } = {},
 ): void {
-  const { rays = true, ringColor = C.cream } = opts;
+  const { rays = true, ringColor = THEMES.sunset.ink } = opts;
 
   if (rays) {
     ctx.save();
@@ -227,9 +232,10 @@ export function sunDisc(
   }
 
   ctx.save();
+  const palette = opts.palette ?? THEMES.sunset;
   ctx.beginPath();
   ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.fillStyle = sunsetGradient(ctx, cx, cy - r, cx, cy + r);
+  ctx.fillStyle = rampLinear(ctx, palette, cx, cy - r, cx, cy + r);
   ctx.fill();
   ctx.restore();
 }
@@ -245,8 +251,8 @@ export function wordmark(
   size: number,
   opts: { fill?: string | CanvasGradient; goaFill?: string } = {},
 ): number {
-  const fill = opts.fill ?? C.cream;
-  const goaFill = opts.goaFill ?? C.yellow;
+  const fill = opts.fill ?? THEMES.sunset.ink;
+  const goaFill = opts.goaFill ?? THEMES.sunset.mark;
 
   const mainFont = font(800, size, DISPLAY, "Georgia, serif");
   const goaFont = font(700, size * 0.92, DEVANAGARI, "sans-serif");
@@ -299,7 +305,7 @@ export function label(
   } = {},
 ): number {
   const {
-    fill = C.cream,
+    fill = THEMES.sunset.ink,
     weight = 400,
     tracking = size * 0.14,
     align = "left",
@@ -346,6 +352,76 @@ export function measureLabel(
 }
 
 /**
+ * QR code, drawn module by module onto the canvas.
+ *
+ * Deliberately small. A QR on a social image is close to unscannable in
+ * practice — you'd need a second device to scan your own timeline — so it
+ * earns its place as ID-card furniture and as a link home when someone
+ * screenshots the image, not as the centrepiece.
+ *
+ * Error correction M plus a real quiet zone, because it gets rendered over a
+ * dark card and re-encoded as JPEG for sharing.
+ */
+export function drawQr(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  size: number,
+  opts: { dark?: string; light?: string; pad?: number; radius?: number } = {},
+): void {
+  const {
+    dark = THEMES.sunset.deep,
+    light = "#f7f3e8",
+    pad = size * 0.09,
+    radius = 12,
+  } = opts;
+
+  let modules: { count: number; isDark: (r: number, c: number) => boolean };
+  try {
+    const qr = qrcode(0, "M");
+    qr.addData(text);
+    qr.make();
+    modules = {
+      count: qr.getModuleCount(),
+      isDark: (r, c) => qr.isDark(r, c),
+    };
+  } catch {
+    return; // never let a QR failure take the whole card down
+  }
+
+  ctx.save();
+
+  // Light plate + quiet zone. Without it the code sits directly on the card
+  // and scanners lose the finder patterns.
+  ctx.fillStyle = light;
+  roundRect(ctx, x, y, size, size, radius);
+  ctx.fill();
+
+  const inner = size - pad * 2;
+  const cell = inner / modules.count;
+
+  // Snap every module to whole-pixel edges, deriving each rect from the *next*
+  // module's boundary. Padding the size instead (ceil + a bit) overdraws each
+  // module by ~20%, which visually still looks like a QR but merges
+  // neighbouring modules and makes it undecodable — which is exactly what
+  // happened the first time.
+  ctx.fillStyle = dark;
+  for (let r = 0; r < modules.count; r++) {
+    const y0 = Math.round(y + pad + r * cell);
+    const y1 = Math.round(y + pad + (r + 1) * cell);
+    for (let c = 0; c < modules.count; c++) {
+      if (!modules.isDark(r, c)) continue;
+      const x0 = Math.round(x + pad + c * cell);
+      const x1 = Math.round(x + pad + (c + 1) * cell);
+      ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
+    }
+  }
+
+  ctx.restore();
+}
+
+/**
  * Empty-state affordance drawn into the photo window.
  *
  * Watching someone use this, the first thing they tapped was the frame itself —
@@ -357,6 +433,7 @@ export function emptyPrompt(
   cx: number,
   cy: number,
   scale = 1,
+  palette: Palette = THEMES.sunset,
 ): void {
   const r = 62 * scale;
 
@@ -364,7 +441,7 @@ export function emptyPrompt(
 
   ctx.beginPath();
   ctx.arc(cx, cy - 14 * scale, r, 0, Math.PI * 2);
-  ctx.fillStyle = "rgba(247, 243, 232, 0.10)";
+  ctx.fillStyle = withAlpha(palette.ink, 0.1);
   ctx.fill();
   ctx.lineWidth = 3 * scale;
   ctx.setLineDash([10 * scale, 9 * scale]);
@@ -374,7 +451,7 @@ export function emptyPrompt(
 
   // Plus glyph.
   const arm = 22 * scale;
-  ctx.strokeStyle = "rgba(247, 243, 232, 0.85)";
+  ctx.strokeStyle = withAlpha(palette.ink, 0.85);
   ctx.lineWidth = 6 * scale;
   ctx.lineCap = "round";
   ctx.beginPath();
@@ -387,7 +464,7 @@ export function emptyPrompt(
   ctx.restore();
 
   label(ctx, "ADD YOUR PHOTO", cx, cy + 100 * scale, 26 * scale, {
-    fill: "rgba(247, 243, 232, 0.78)",
+    fill: withAlpha(palette.ink, 0.78),
     weight: 600,
     tracking: 4 * scale,
     align: "center",

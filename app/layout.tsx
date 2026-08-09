@@ -1,14 +1,9 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
 import "./globals.css";
 
-// system-ui resolves to real SF Pro on Apple platforms, so Inter only ever
-// loads as the substitute face on everything else.
-const inter = Inter({
-  variable: "--font-inter",
-  subsets: ["latin"],
-  display: "swap",
-});
+// No webfont for the UI. system-ui resolves to SF Pro on Apple platforms and
+// Roboto / Segoe UI elsewhere — all fine at this weight range, and it saves
+// every visitor a 48KB download for a face most of them never see.
 
 /**
  * Vercel injects VERCEL_PROJECT_PRODUCTION_URL on every deploy, so absolute OG
@@ -46,8 +41,13 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${inter.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col">{children}</body>
+    <html lang="en" className="h-full antialiased">
+      {/* Grammarly and similar extensions stamp attributes onto <body> before
+          React hydrates, which trips the mismatch warning. Suppressing it here
+          keeps the console clean so a real mismatch is still visible. */}
+      <body className="min-h-full flex flex-col" suppressHydrationWarning>
+        {children}
+      </body>
     </html>
   );
 }

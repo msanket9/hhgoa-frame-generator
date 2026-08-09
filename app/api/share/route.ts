@@ -70,7 +70,11 @@ export async function POST(request: Request) {
   const ext = image.type === "image/jpeg" ? "jpg" : "png";
   const ogExt = og.type === "image/jpeg" ? "jpg" : "png";
 
-  const id = nanoid(10);
+  // The client allocates the id so the card's QR can encode the final URL
+  // before the image is rendered. Validated hard; anything odd falls back to a
+  // server-generated id.
+  const requested = String(form.get("id") ?? "");
+  const id = /^[A-Za-z0-9_-]{6,24}$/.test(requested) ? requested : nanoid(10);
   const name = String(form.get("name") ?? "").slice(0, 60);
   const title = String(form.get("title") ?? "").slice(0, 60);
 

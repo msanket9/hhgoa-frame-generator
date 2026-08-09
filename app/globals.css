@@ -60,10 +60,11 @@
   --color-divider-soft: var(--divider-soft);
   --color-hairline: var(--hairline);
 
-  /* system-ui resolves to real SF Pro on macOS/iOS; Inter is the closest
-     open-source substitute everywhere else. */
-  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, var(--font-inter),
-    "Segoe UI", sans-serif;
+  /* No webfont: system-ui gives SF Pro on Apple platforms, Roboto on Android,
+     Segoe UI on Windows. All read correctly at this weight range, and it keeps
+     first paint free of a font download. */
+  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
 
   --radius-xs: 5px;
   --radius-sm: 8px;

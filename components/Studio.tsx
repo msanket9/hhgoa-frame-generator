@@ -1,9 +1,15 @@
 "use client";
 
+import { nanoid } from "nanoid";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { PHOTO_WINDOW, autoFrame, warmDetector } from "@/lib/autoframe";
-import { DecodeError, decodeImage, looksLikeImage } from "@/lib/decode";
+import {
+  DecodeError,
+  decodeImage,
+  looksLikeImage,
+  rotateBitmap,
+} from "@/lib/decode";
 import { canvasToBlob, downloadBlob, fileNameFor } from "@/lib/export";
 import { renderOg } from "@/lib/render/og";
 import {
@@ -17,6 +23,14 @@ import {
   clampTransform,
   renderToAsync,
 } from "@/lib/render";
+import { LOOKS, LOOK_ORDER, type LookId } from "@/lib/render/looks";
+import {
+  THEMES,
+  THEME_LABELS,
+  THEME_SWATCH,
+  type ThemeId,
+} from "@/lib/render/themes";
+import type { CardSide } from "@/lib/render/types";
 import { titleFor } from "@/lib/titles";
 
 import FormatToggle from "./FormatToggle";
@@ -28,6 +42,7 @@ const EMPTY_DETAILS: Details = {
   stack: "",
   handle: "",
   title: "",
+  shareUrl: "",
 };
 
 export default function Studio() {
@@ -43,6 +58,27 @@ export default function Studio() {
   });
   const [details, setDetails] = useState<Details>(EMPTY_DETAILS);
   const [titleSalt, setTitleSalt] = useState(0);
+
+  /**
+   * The share id is allocated up front, not after upload, because the QR is
+   * baked into the image — the URL it encodes has to exist before the pixels
+   * are drawn.
+   *
+   * It stays fixed for the session, so re-sharing after a tweak overwrites the
+   * same page rather than orphaning the QR in an already-downloaded PNG. That
+   * does mean a guessed id could be overwritten; with a 10-char nanoid that is
+   * not a realistic threat here, and blocking legitimate re-shares would be a
+   * far worse failure.
+   */
+  const [share] = useState(() => {
+    const id = nanoid(10);
+    const origin = typeof window === "undefined" ? "" : window.location.origin;
+    return { id, url: origin ? `${origin}/s/${id}` : "" };
+  });
+
+  const [theme, setTheme] = useState<ThemeId>("sunset");
+  const [look, setLook] = useState<LookId>("as-shot");
+  const [side, setSide] = useState<CardSide>("front");
 
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -63,8 +99,16 @@ export default function Studio() {
   );
 
   const renderState: RenderState = useMemo(
-    () => ({ bitmap, transform, details: { ...details, title } }),
-    [bitmap, transform, details, title],
+    () => ({
+      bitmap,
+      transform,
+      details: { ...details, title, shareUrl: share.url },
+      theme,
+      look,
+      // The profile frame has no reverse; only the ID card flips.
+      side: format === "card" ? side : "front",
+    }),
+    [bitmap, transform, details, title, share.url, theme, look, side, format],
   );
 
   /* ---------------------------------------------------------------- render */
@@ -183,6 +227,41 @@ export default function Studio() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [format]);
 
+  /** Re-solve auto-framing for the current photo and format. */
+  const reframe = useCallback(
+    async (source: ImageBitmap) => {
+      const win = PHOTO_WINDOW[format];
+      const result = await autoFrame(source, win.w, win.h);
+      if (result.foundFace) {
+        setTransform(clampTransform(source, result.transform, win.w, win.h));
+        setAutoFramed(true);
+      } else {
+        setTransform({ scale: 1, offsetX: 0, offsetY: 0 });
+        setAutoFramed(false);
+      }
+    },
+    [format],
+  );
+
+  const handleRotate = useCallback(async () => {
+    if (!bitmap) return;
+    setStatus("Rotating…");
+    const rotated = await rotateBitmap(bitmap, 1);
+    setBitmap((prev) => {
+      if (prev && prev !== rotated) prev.close();
+      return rotated;
+    });
+    setStatus(null);
+    // Re-detect after turning: a face that was sideways is often only
+    // detectable once the photo is the right way up.
+    await reframe(rotated);
+  }, [bitmap, reframe]);
+
+  const handleReset = useCallback(() => {
+    if (!bitmap) return;
+    void reframe(bitmap);
+  }, [bitmap, reframe]);
+
   const openPicker = () => {
     warm();
     inputRef.current?.click();
@@ -190,45 +269,79 @@ export default function Studio() {
 
   /* ------------------------------------------------------------ drag / pan */
 
-  const dragRef = useRef<{
-    pointerId: number;
+  /**
+   * Pointer handling covers one- and two-finger gestures from the same map.
+   *
+   * A slider alone is a poor fit for a phone — pinching is what people reach
+   * for, and the brief puts most traffic on mobile. Wheel-zoom is the desktop
+   * equivalent.
+   */
+  const pointers = useRef(new Map<number, { x: number; y: number }>());
+  const gesture = useRef<{
+    origin: Transform;
     startX: number;
     startY: number;
-    moved: boolean;
-    origin: Transform;
+    startDist: number;
     rect: DOMRect;
+    moved: boolean;
   } | null>(null);
+
+  const dist = (a: { x: number; y: number }, b: { x: number; y: number }) =>
+    Math.hypot(a.x - b.x, a.y - b.y);
+
+  const beginGesture = (canvas: HTMLCanvasElement) => {
+    const pts = [...pointers.current.values()];
+    if (!pts.length) return;
+    const cx = pts.reduce((a, p) => a + p.x, 0) / pts.length;
+    const cy = pts.reduce((a, p) => a + p.y, 0) / pts.length;
+    gesture.current = {
+      origin: transform,
+      startX: cx,
+      startY: cy,
+      startDist: pts.length >= 2 ? dist(pts[0], pts[1]) : 0,
+      rect: canvas.getBoundingClientRect(),
+      moved: false,
+    };
+  };
 
   const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (!bitmap) return;
     const canvas = e.currentTarget;
     canvas.setPointerCapture(e.pointerId);
-    dragRef.current = {
-      pointerId: e.pointerId,
-      startX: e.clientX,
-      startY: e.clientY,
-      moved: false,
-      origin: transform,
-      rect: canvas.getBoundingClientRect(),
-    };
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    beginGesture(canvas);
   };
 
   const onPointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    const drag = dragRef.current;
-    if (!drag || !bitmap || drag.pointerId !== e.pointerId) return;
+    if (!bitmap || !pointers.current.has(e.pointerId)) return;
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
-    const dx = (e.clientX - drag.startX) / drag.rect.width;
-    const dy = (e.clientY - drag.startY) / drag.rect.height;
-    if (Math.abs(dx) > 0.004 || Math.abs(dy) > 0.004) drag.moved = true;
+    const g = gesture.current;
+    if (!g) return;
+
+    const pts = [...pointers.current.values()];
+    const cx = pts.reduce((a, p) => a + p.x, 0) / pts.length;
+    const cy = pts.reduce((a, p) => a + p.y, 0) / pts.length;
+
+    const dx = (cx - g.startX) / g.rect.width;
+    const dy = (cy - g.startY) / g.rect.height;
+    if (Math.abs(dx) > 0.004 || Math.abs(dy) > 0.004) g.moved = true;
+
+    let scale = g.origin.scale;
+    if (pts.length >= 2 && g.startDist > 0) {
+      const ratio = dist(pts[0], pts[1]) / g.startDist;
+      scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, g.origin.scale * ratio));
+      g.moved = true;
+    }
 
     const win = PHOTO_WINDOW[format];
     setTransform(
       clampTransform(
         bitmap,
         {
-          scale: drag.origin.scale,
-          offsetX: drag.origin.offsetX + dx,
-          offsetY: drag.origin.offsetY + dy,
+          scale,
+          offsetX: g.origin.offsetX + dx,
+          offsetY: g.origin.offsetY + dy,
         },
         win.w,
         win.h,
@@ -237,14 +350,33 @@ export default function Studio() {
   };
 
   const endDrag = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (dragRef.current?.pointerId === e.pointerId) dragRef.current = null;
+    pointers.current.delete(e.pointerId);
+    if (pointers.current.size === 0) {
+      // Keep `moved` readable by the click handler that fires next.
+      setTimeout(() => {
+        gesture.current = null;
+      }, 0);
+    } else {
+      // Lifting one finger of a pinch re-bases the gesture instead of jumping.
+      beginGesture(e.currentTarget);
+    }
+  };
+
+  const onWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
+    if (!bitmap) return;
+    const win = PHOTO_WINDOW[format];
+    const next = Math.max(
+      MIN_SCALE,
+      Math.min(MAX_SCALE, transform.scale * (1 - e.deltaY * 0.0015)),
+    );
+    setTransform((t) => clampTransform(bitmap, { ...t, scale: next }, win.w, win.h));
   };
 
   const onCanvasClick = () => {
     // The frame is the biggest thing on screen and reads as the button, so it
-    // opens the picker when empty. Once a photo is in, a click that didn't
-    // drag still means "change photo" — a tap on the image is never a pan.
-    if (!bitmap || !dragRef.current?.moved) openPicker();
+    // opens the picker when empty. After a photo is in, a tap that didn't pan
+    // or pinch still means "change photo".
+    if (!bitmap || !gesture.current?.moved) openPicker();
   };
 
   const onScaleChange = (scale: number) => {
@@ -292,23 +424,28 @@ export default function Studio() {
     const source = canvasRef.current;
     if (!source) return null;
 
+    // Render the front into a scratch canvas for the share image — the card
+    // may currently be flipped, and nobody wants a QR as their link preview.
+    const front = document.createElement("canvas");
+    await renderToAsync(front, format, { ...renderState, side: "front" });
+
     const og = document.createElement("canvas");
     og.width = 1200;
     og.height = 630;
     const ctx = og.getContext("2d");
     if (!ctx) return null;
-    renderOg(ctx, source, { ...details, title });
+    renderOg(ctx, front, { ...details, title, shareUrl: share.url });
 
     try {
       const [image, ogBlob] = await Promise.all([
-        canvasToBlob(source, "image/jpeg", 0.9),
+        canvasToBlob(front, "image/jpeg", 0.9),
         canvasToBlob(og, "image/jpeg", 0.9),
       ]);
       return { image, og: ogBlob };
     } catch {
       return null;
     }
-  }, [details, title]);
+  }, [details, title, share.url, format, renderState]);
 
   const spec = FORMATS[format];
 
@@ -357,6 +494,7 @@ export default function Studio() {
           onPointerMove={onPointerMove}
           onPointerUp={endDrag}
           onPointerCancel={endDrag}
+          onWheel={onWheel}
           role="button"
           tabIndex={0}
           onKeyDown={(e) => {
@@ -378,6 +516,17 @@ export default function Studio() {
             filter: dragging ? "brightness(1.06)" : undefined,
           }}
         />
+
+        {format === "card" && (
+          <button
+            type="button"
+            onClick={() => setSide((v) => (v === "front" ? "back" : "front"))}
+            className="btn btn-quiet absolute -bottom-3 left-1/2 !min-h-0 -translate-x-1/2 !px-4 !py-2 !text-[0.76rem]"
+            style={{ boxShadow: "0 2px 10px rgba(0,0,0,.10)" }}
+          >
+            {side === "front" ? "Show the back" : "Show the front"}
+          </button>
+        )}
 
         {status && (
           <div
@@ -419,7 +568,88 @@ export default function Studio() {
               value={transform.scale}
               onChange={(e) => onScaleChange(Number(e.target.value))}
             />
-            <p className="t-fine -mt-1">Drag the image to reposition it.</p>
+            <p className="t-fine -mt-1">
+              Drag to reposition · pinch or scroll to zoom
+            </p>
+
+            <div className="mt-3 flex gap-3">
+              <button
+                type="button"
+                className="btn btn-quiet flex-1"
+                onClick={handleRotate}
+              >
+                Rotate 90°
+              </button>
+              <button
+                type="button"
+                className="btn btn-quiet flex-1"
+                onClick={handleReset}
+              >
+                Recentre
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <span className="t-eyebrow mb-2 block">Theme</span>
+            <div className="flex gap-2">
+              {(Object.keys(THEMES) as ThemeId[]).map((id) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setTheme(id)}
+                  aria-pressed={theme === id}
+                  className="flex flex-1 items-center justify-center gap-2 rounded-[11px] px-3 py-2.5 transition-colors"
+                  style={{
+                    border:
+                      theme === id
+                        ? "1.5px solid var(--accent)"
+                        : "1px solid var(--hairline)",
+                    background:
+                      theme === id
+                        ? "color-mix(in srgb, var(--accent) 6%, white)"
+                        : "var(--canvas)",
+                  }}
+                >
+                  <span
+                    className="h-4 w-4 shrink-0 rounded-full"
+                    style={{
+                      background: THEME_SWATCH[id],
+                      boxShadow: "inset 0 0 0 1px rgba(0,0,0,.12)",
+                    }}
+                  />
+                  <span className="t-caption-strong">{THEME_LABELS[id]}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <span className="t-eyebrow mb-2 block">Photo look</span>
+            <div className="grid grid-cols-4 gap-2">
+              {LOOK_ORDER.map((id) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setLook(id)}
+                  aria-pressed={look === id}
+                  className="t-caption rounded-[11px] px-2 py-2.5 transition-colors"
+                  style={{
+                    border:
+                      look === id
+                        ? "1.5px solid var(--accent)"
+                        : "1px solid var(--hairline)",
+                    background:
+                      look === id
+                        ? "color-mix(in srgb, var(--accent) 6%, white)"
+                        : "var(--canvas)",
+                    fontWeight: look === id ? 600 : 400,
+                  }}
+                >
+                  {LOOKS[id].label}
+                </button>
+              ))}
+            </div>
           </div>
 
           <DetailFields
@@ -432,7 +662,8 @@ export default function Studio() {
 
           <ShareBar
             format={format}
-            details={{ ...details, title }}
+            details={{ ...details, title, shareUrl: share.url }}
+            shareId={share.id}
             blob={exported}
             getBlob={ensureBlob}
             getShareBlobs={buildShareBlobs}

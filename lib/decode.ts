@@ -71,6 +71,42 @@ async function toDecodableBlob(file: File): Promise<Blob> {
   }
 }
 
+/**
+ * Rotates the source bitmap itself rather than rotating at draw time.
+ *
+ * Everything downstream — cover-fit, offset clamping, face detection — reasons
+ * about the bitmap's own width and height. Baking the turn in keeps that math
+ * untouched; carrying a rotation flag through it would mean special-casing
+ * every one of those.
+ *
+ * EXIF handles most sideways photos automatically, but not all: screenshots,
+ * scans, re-encoded images and anything stripped of metadata arrive with no
+ * orientation at all, and only the user can say which way is up.
+ */
+export async function rotateBitmap(
+  src: ImageBitmap,
+  quarterTurns: number,
+): Promise<ImageBitmap> {
+  const turns = ((quarterTurns % 4) + 4) % 4;
+  if (turns === 0) return src;
+
+  const swap = turns % 2 === 1;
+  const width = swap ? src.height : src.width;
+  const height = swap ? src.width : src.height;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return src;
+
+  ctx.translate(width / 2, height / 2);
+  ctx.rotate((turns * Math.PI) / 2);
+  ctx.drawImage(src, -src.width / 2, -src.height / 2);
+
+  return createImageBitmap(canvas);
+}
+
 export type DecodedImage = {
   bitmap: ImageBitmap;
   /** Dimensions of the decoded (possibly downscaled) bitmap. */

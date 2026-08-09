@@ -1,5 +1,6 @@
 import { DISPLAY, font } from "../fonts";
-import { C, EVENT, label, sunsetGradient, wordmark } from "./brand";
+import { EVENT, label, rampLinear, wordmark } from "./brand";
+import { THEMES } from "./themes";
 import type { Details } from "./types";
 
 /**
@@ -23,7 +24,7 @@ export function renderOg(
 ): void {
   ctx.clearRect(0, 0, W, H);
 
-  ctx.fillStyle = C.green;
+  ctx.fillStyle = THEMES.sunset.base;
   ctx.fillRect(0, 0, W, H);
 
   const g = ctx.createLinearGradient(0, 0, W, H);
@@ -70,7 +71,7 @@ export function renderOg(
     size -= 2;
     ctx.font = font(800, size, DISPLAY, "Georgia, serif");
   }
-  ctx.fillStyle = C.cream;
+  ctx.fillStyle = THEMES.sunset.ink;
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
   ctx.fillText(name, textX, 340);
@@ -78,7 +79,7 @@ export function renderOg(
 
   if (details.title.trim()) {
     label(ctx, details.title.trim().toUpperCase(), textX, 388, 22, {
-      fill: sunsetGradient(ctx, textX, 366, textX + textW, 388),
+      fill: rampLinear(ctx, THEMES.sunset, textX, 366, textX + textW, 388),
       weight: 600,
       tracking: 3,
     });
@@ -100,7 +101,7 @@ export function renderOg(
   });
 
   label(ctx, EVENT.hashtag, textX, 528, 22, {
-    fill: C.yellow,
+    fill: THEMES.sunset.mark,
     weight: 600,
     tracking: 2.4,
   });

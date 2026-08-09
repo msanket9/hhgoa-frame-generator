@@ -17,6 +17,7 @@ import {
 export default function ShareBar({
   format,
   details,
+  shareId,
   blob,
   getBlob,
   getShareBlobs,
@@ -25,6 +26,8 @@ export default function ShareBar({
 }: {
   format: FormatId;
   details: Details;
+  /** Pre-allocated id — must match the URL already encoded in the card's QR. */
+  shareId: string;
   /** Pre-exported bytes, so the native path never awaits before share(). */
   blob: Blob | null;
   getBlob: () => Promise<Blob | null>;
@@ -68,6 +71,7 @@ export default function ShareBar({
       if (!shots) throw new Error("Couldn't prepare the image.");
 
       const { pageUrl } = await uploadForShare(shots.image, shots.og, {
+        id: shareId,
         name: details.name,
         title: details.title,
       });
