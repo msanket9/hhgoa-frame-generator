@@ -77,8 +77,8 @@ export async function uploadForShare(
   meta: { name?: string; title?: string },
 ): Promise<UploadResult> {
   const body = new FormData();
-  body.append("image", image, "image.png");
-  body.append("og", ogImage, "og.png");
+  body.append("image", image, "image.jpg");
+  body.append("og", ogImage, "og.jpg");
   if (meta.name) body.append("name", meta.name);
   if (meta.title) body.append("title", meta.title);
 
@@ -90,8 +90,16 @@ export async function uploadForShare(
   return (await res.json()) as UploadResult;
 }
 
+/**
+ * X's web intent. On desktop this opens the composer; on mobile it deep-links
+ * into the X app with the caption already filled in.
+ *
+ * An empty `url` is omitted rather than sent blank — X renders a stray empty
+ * parameter as a trailing space in the composer.
+ */
 export function intentUrl(pageUrl: string, text = SHARE_TEXT): string {
-  const params = new URLSearchParams({ text, url: pageUrl });
+  const params = new URLSearchParams({ text });
+  if (pageUrl) params.set("url", pageUrl);
   return `https://x.com/intent/tweet?${params.toString()}`;
 }
 

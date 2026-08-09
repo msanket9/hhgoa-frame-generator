@@ -4,6 +4,7 @@ import {
   DEVANAGARI_RANGE,
   EVENT,
   arcText,
+  emptyPrompt,
   sunsetConic,
   sunsetGradient,
 } from "./brand";
@@ -80,12 +81,7 @@ function drawPhotoWindow(
   } else {
     ctx.fillStyle = C.greenDeep;
     ctx.fillRect(CENTER - R_INNER, CENTER - R_INNER, R_INNER * 2, R_INNER * 2);
-
-    ctx.fillStyle = "rgba(247, 243, 232, 0.30)";
-    ctx.font = font(400, 30, MONO, "ui-monospace, monospace");
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText("YOUR PHOTO", CENTER, CENTER);
+    emptyPrompt(ctx, CENTER, CENTER, 1.15);
   }
 
   ctx.restore();

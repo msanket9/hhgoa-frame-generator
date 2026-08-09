@@ -346,6 +346,55 @@ export function measureLabel(
 }
 
 /**
+ * Empty-state affordance drawn into the photo window.
+ *
+ * Watching someone use this, the first thing they tapped was the frame itself —
+ * it's the biggest thing on screen and it says "your photo", so of course it
+ * reads as the button. A label alone wasn't enough; it needs to look tappable.
+ */
+export function emptyPrompt(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  scale = 1,
+): void {
+  const r = 62 * scale;
+
+  ctx.save();
+
+  ctx.beginPath();
+  ctx.arc(cx, cy - 14 * scale, r, 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(247, 243, 232, 0.10)";
+  ctx.fill();
+  ctx.lineWidth = 3 * scale;
+  ctx.setLineDash([10 * scale, 9 * scale]);
+  ctx.strokeStyle = "rgba(247, 243, 232, 0.45)";
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Plus glyph.
+  const arm = 22 * scale;
+  ctx.strokeStyle = "rgba(247, 243, 232, 0.85)";
+  ctx.lineWidth = 6 * scale;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(cx - arm, cy - 14 * scale);
+  ctx.lineTo(cx + arm, cy - 14 * scale);
+  ctx.moveTo(cx, cy - 14 * scale - arm);
+  ctx.lineTo(cx, cy - 14 * scale + arm);
+  ctx.stroke();
+
+  ctx.restore();
+
+  label(ctx, "ADD YOUR PHOTO", cx, cy + 100 * scale, 26 * scale, {
+    fill: "rgba(247, 243, 232, 0.78)",
+    weight: 600,
+    tracking: 4 * scale,
+    align: "center",
+  });
+}
+
+/**
  * Soft dark scrim behind text sitting over photography.
  *
  * Required, not decorative: the brief promises real photos, and without this

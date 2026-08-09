@@ -1,7 +1,8 @@
-import { DISPLAY, MONO, font } from "../fonts";
+import { DISPLAY, font } from "../fonts";
 import {
   C,
   EVENT,
+  emptyPrompt,
   label,
   measureLabel,
   roundRect,
@@ -91,11 +92,7 @@ function drawPhotoPanel(
   } else {
     ctx.fillStyle = C.greenDeep;
     ctx.fillRect(M, PHOTO_Y, INNER, PHOTO_H);
-    ctx.fillStyle = "rgba(247, 243, 232, 0.32)";
-    ctx.font = font(400, 30, MONO, "ui-monospace, monospace");
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText("YOUR PHOTO", W / 2, PHOTO_Y + PHOTO_H / 2);
+    emptyPrompt(ctx, W / 2, PHOTO_Y + PHOTO_H / 2, 1.15);
   }
 
   // Scrim carries the overlaid label across any photo — bright sky, white

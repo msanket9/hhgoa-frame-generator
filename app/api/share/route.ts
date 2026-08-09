@@ -57,12 +57,18 @@ export async function POST(request: Request) {
   if (image.size > MAX_BYTES || og.size > MAX_BYTES) {
     return badRequest("Image too large.");
   }
+  const allowed = new Set(["image/png", "image/jpeg"]);
   if (
-    (image.type && image.type !== "image/png") ||
-    (og.type && og.type !== "image/png")
+    (image.type && !allowed.has(image.type)) ||
+    (og.type && !allowed.has(og.type))
   ) {
-    return badRequest("Only PNG is accepted.");
+    return badRequest("Only PNG or JPEG is accepted.");
   }
+
+  // Extension and content-type must match what was actually sent, or X's
+  // crawler gets a PNG-named JPEG and some caches refuse to render it.
+  const ext = image.type === "image/jpeg" ? "jpg" : "png";
+  const ogExt = og.type === "image/jpeg" ? "jpg" : "png";
 
   const id = nanoid(10);
   const name = String(form.get("name") ?? "").slice(0, 60);
@@ -76,24 +82,24 @@ export async function POST(request: Request) {
 
     if (hasBlob()) {
       const [stored, storedOg] = await Promise.all([
-        put(`frames/${id}.png`, image, {
+        put(`frames/${id}.${ext}`, image, {
           access: "public",
           addRandomSuffix: false,
-          contentType: "image/png",
+          contentType: image.type || "image/png",
           cacheControlMaxAge: 31536000,
         }),
-        put(`frames/${id}-og.png`, og, {
+        put(`frames/${id}-og.${ogExt}`, og, {
           access: "public",
           addRandomSuffix: false,
-          contentType: "image/png",
+          contentType: og.type || "image/png",
           cacheControlMaxAge: 31536000,
         }),
       ]);
       imageUrl = stored.url;
       ogUrl = storedOg.url;
     } else {
-      imageUrl = origin + (await putLocal(`${id}.png`, image));
-      ogUrl = origin + (await putLocal(`${id}-og.png`, og));
+      imageUrl = origin + (await putLocal(`${id}.${ext}`, image));
+      ogUrl = origin + (await putLocal(`${id}-og.${ogExt}`, og));
     }
 
     // Metadata rides alongside as JSON so the share page can render without a

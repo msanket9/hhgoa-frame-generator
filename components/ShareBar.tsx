@@ -5,6 +5,7 @@ import { useState } from "react";
 import { fileNameFor } from "@/lib/export";
 import type { Details, FormatId } from "@/lib/render/types";
 import {
+  SHARE_TEXT,
   blobToFile,
   canShareFiles,
   copyImageToClipboard,
@@ -14,59 +15,59 @@ import {
 } from "@/lib/share";
 
 export default function ShareBar({
-  disabled,
   format,
   details,
   blob,
   getBlob,
-  getOgBlob,
+  getShareBlobs,
   onDownload,
   onError,
 }: {
-  disabled: boolean;
   format: FormatId;
   details: Details;
-  /** Pre-exported bytes, so the share path never awaits before share(). */
+  /** Pre-exported bytes, so the native path never awaits before share(). */
   blob: Blob | null;
   getBlob: () => Promise<Blob | null>;
-  getOgBlob: () => Promise<Blob | null>;
+  getShareBlobs: () => Promise<{ image: Blob; og: Blob } | null>;
   onDownload: () => void;
   onError: (message: string) => void;
 }) {
   const [sharing, setSharing] = useState(false);
   const [copied, setCopied] = useState(false);
-
   const filename = fileNameFor(format, details.name);
 
-  /**
-   * Deliberately not `async`.
-   *
-   * Safari only allows navigator.share() while user activation is live, and
-   * activation is lost across an await. So the native path runs synchronously
-   * off the pre-exported blob, and only the desktop fallback — which doesn't
-   * need activation for anything but window.open — goes async.
-   */
-  const handleShare = () => {
-    if (blob && canShareFiles(blobToFile(blob, filename))) {
-      void shareFile(blobToFile(blob, filename)).then((result) => {
-        if (result === "unsupported") void shareViaLink();
-      });
-      return;
-    }
-    void shareViaLink();
-  };
+  // Computed once during render, not in an effect: this component only ever
+  // mounts client-side (after a photo exists), so there's no hydration to
+  // mismatch and no need for a cascading state update.
+  const [canShareNatively] = useState(() =>
+    canShareFiles(
+      new File([new Blob([], { type: "image/png" })], "probe.png", {
+        type: "image/png",
+      }),
+    ),
+  );
 
-  const shareViaLink = async () => {
-    // Opened synchronously where possible; popup blockers reject a
-    // window.open that happens after an await.
-    const popup = window.open("", "_blank", "noopener,noreferrer");
+  /**
+   * Primary action: open X directly with the caption pre-filled.
+   *
+   * navigator.share() was the primary path and that was wrong — it opens the
+   * OS share sheet, so the user has to hunt for X. The intent URL opens X
+   * itself on desktop and deep-links straight into the app on mobile, which is
+   * what "Share to X" should obviously do. The image rides along as the link's
+   * OG card.
+   */
+  const handleShare = async () => {
+    // Opened synchronously: a window.open after an await is blocked. And no
+    // `noopener` here — it makes window.open return null, so the handle we
+    // need to redirect would never exist.
+    const popup = window.open("about:blank", "_blank");
     setSharing(true);
 
     try {
-      const [image, og] = await Promise.all([getBlob(), getOgBlob()]);
-      if (!image || !og) throw new Error("Couldn't prepare the image.");
+      const shots = await getShareBlobs();
+      if (!shots) throw new Error("Couldn't prepare the image.");
 
-      const { pageUrl } = await uploadForShare(image, og, {
+      const { pageUrl } = await uploadForShare(shots.image, shots.og, {
         name: details.name,
         title: details.title,
       });
@@ -74,16 +75,22 @@ export default function ShareBar({
 
       if (popup && !popup.closed) popup.location.href = url;
       else window.location.href = url;
-    } catch (err) {
-      popup?.close();
-      onError(
-        err instanceof Error
-          ? `${err.message} You can still download the image and attach it.`
-          : "Sharing failed. Download the image and attach it instead.",
-      );
+    } catch {
+      // Still get them to X with the caption ready; they can attach the
+      // downloaded image themselves rather than hitting a dead end.
+      const fallback = intentUrl("");
+      if (popup && !popup.closed) popup.location.href = fallback;
+      else window.location.href = fallback;
+      onError("Couldn't upload the image — download it and attach it to the post.");
     } finally {
       setSharing(false);
     }
+  };
+
+  /** Secondary: hand the actual PNG to the OS sheet (mobile). */
+  const handleNativeShare = () => {
+    if (!blob) return;
+    void shareFile(blobToFile(blob, filename), SHARE_TEXT);
   };
 
   const handleCopy = async () => {
@@ -92,8 +99,7 @@ export default function ShareBar({
       onError("Couldn't export the image.");
       return;
     }
-    const ok = await copyImageToClipboard(b);
-    if (ok) {
+    if (await copyImageToClipboard(b)) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } else {
@@ -107,9 +113,9 @@ export default function ShareBar({
         type="button"
         className="btn btn-primary w-full"
         onClick={handleShare}
-        disabled={disabled || sharing}
+        disabled={sharing}
       >
-        {sharing ? "Preparing…" : "Share to X"}
+        {sharing ? "Opening X…" : "Share to X"}
       </button>
 
       <div className="flex gap-3">
@@ -117,24 +123,24 @@ export default function ShareBar({
           type="button"
           className="btn btn-secondary flex-1"
           onClick={onDownload}
-          disabled={disabled}
         >
           Download
         </button>
-        <button
-          type="button"
-          className="btn btn-quiet flex-1"
-          onClick={handleCopy}
-          disabled={disabled}
-        >
+        <button type="button" className="btn btn-quiet flex-1" onClick={handleCopy}>
           {copied ? "Copied" : "Copy image"}
         </button>
       </div>
 
-      <p className="t-fine text-center">
-        No login. No signup. Your photo never leaves your device unless you
-        share.
-      </p>
+      {canShareNatively && (
+        <button
+          type="button"
+          onClick={handleNativeShare}
+          className="t-caption mx-auto underline underline-offset-4"
+          style={{ color: "var(--ink-muted-48)" }}
+        >
+          Share the image file instead
+        </button>
+      )}
     </div>
   );
 }

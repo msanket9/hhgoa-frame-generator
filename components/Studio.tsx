@@ -1,13 +1,6 @@
 "use client";
 
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  useTransition,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { PHOTO_WINDOW, autoFrame, warmDetector } from "@/lib/autoframe";
 import { DecodeError, decodeImage, looksLikeImage } from "@/lib/decode";
@@ -26,7 +19,6 @@ import {
 } from "@/lib/render";
 import { titleFor } from "@/lib/titles";
 
-import Dropzone from "./Dropzone";
 import FormatToggle from "./FormatToggle";
 import ShareBar from "./ShareBar";
 
@@ -40,6 +32,7 @@ const EMPTY_DETAILS: Details = {
 
 export default function Studio() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const [format, setFormat] = useState<FormatId>("pfp");
   const [bitmap, setBitmap] = useState<ImageBitmap | null>(null);
@@ -51,14 +44,18 @@ export default function Studio() {
   const [details, setDetails] = useState<Details>(EMPTY_DETAILS);
   const [titleSalt, setTitleSalt] = useState(0);
 
-  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [autoFramed, setAutoFramed] = useState(false);
-  const [, startTransition] = useTransition();
-
-  // Kept current so the share handler has bytes ready without awaiting —
-  // Safari drops user activation across an await and rejects share().
+  const [dragging, setDragging] = useState(false);
   const [exported, setExported] = useState<Blob | null>(null);
+
+  const warmed = useRef(false);
+  const warm = useCallback(() => {
+    if (warmed.current) return;
+    warmed.current = true;
+    warmDetector();
+  }, []);
 
   const title = useMemo(
     () => details.title || titleFor(details.name, titleSalt),
@@ -70,9 +67,7 @@ export default function Studio() {
     [bitmap, transform, details, title],
   );
 
-  /* ----------------------------------------------------------------------
-     Render
-     ---------------------------------------------------------------------- */
+  /* ---------------------------------------------------------------- render */
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -82,13 +77,6 @@ export default function Studio() {
     void (async () => {
       await renderToAsync(canvas, format, renderState);
       if (cancelled) return;
-      // Re-export lazily so the share button always has fresh bytes.
-      try {
-        const blob = await canvasToBlob(canvas);
-        if (!cancelled) setExported(blob);
-      } catch {
-        /* export retried on demand */
-      }
     })();
 
     return () => {
@@ -96,9 +84,41 @@ export default function Studio() {
     };
   }, [format, renderState]);
 
-  /* ----------------------------------------------------------------------
-     Upload
-     ---------------------------------------------------------------------- */
+  /**
+   * PNG export, debounced and separate from rendering.
+   *
+   * This used to run inside the render effect, which meant re-encoding a
+   * ~1.4MB PNG on every pointermove while dragging the photo. Rendering is
+   * sub-20ms; the encode was the expensive part, and it was firing dozens of
+   * times a second for no reason.
+   *
+   * It still runs ahead of time rather than on click, because navigator.share()
+   * has to be called synchronously inside the user gesture — Safari drops
+   * activation across an await, so the bytes must already exist.
+   */
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !bitmap) return;
+    let cancelled = false;
+
+    setExported(null);
+    const timer = setTimeout(() => {
+      void canvasToBlob(canvas)
+        .then((blob) => {
+          if (!cancelled) setExported(blob);
+        })
+        .catch(() => {
+          /* retried on demand */
+        });
+    }, 500);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [format, renderState, bitmap]);
+
+  /* ---------------------------------------------------------------- upload */
 
   const handleFile = useCallback(
     async (file: File) => {
@@ -107,7 +127,11 @@ export default function Studio() {
         return;
       }
 
-      setBusy(true);
+      // HEIC on a non-Safari browser pays a one-off wasm decode, which is the
+      // only path slow enough to need naming — say what's happening rather
+      // than showing a generic spinner.
+      const heic = /\.(heic|heif)$/i.test(file.name) || /heic|heif/i.test(file.type);
+      setStatus(heic ? "Converting photo…" : "Reading photo…");
       setError(null);
       setAutoFramed(false);
 
@@ -121,20 +145,18 @@ export default function Studio() {
           return decoded.bitmap;
         });
         setTransform({ scale: 1, offsetX: 0, offsetY: 0 });
-        setBusy(false);
+        setStatus(null);
 
         const win = PHOTO_WINDOW[format];
         const result = await autoFrame(decoded.bitmap, win.w, win.h);
         if (result.foundFace) {
-          startTransition(() => {
-            setTransform(
-              clampTransform(decoded.bitmap, result.transform, win.w, win.h),
-            );
-            setAutoFramed(true);
-          });
+          setTransform(
+            clampTransform(decoded.bitmap, result.transform, win.w, win.h),
+          );
+          setAutoFramed(true);
         }
       } catch (err) {
-        setBusy(false);
+        setStatus(null);
         setError(
           err instanceof DecodeError
             ? err.message
@@ -145,8 +167,7 @@ export default function Studio() {
     [format],
   );
 
-  // Re-solve framing when switching formats — the photo window changes shape,
-  // so the same transform would sit differently.
+  // Re-solve framing when switching formats — the photo window changes shape.
   useEffect(() => {
     if (!bitmap || !autoFramed) return;
     const win = PHOTO_WINDOW[format];
@@ -162,14 +183,18 @@ export default function Studio() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [format]);
 
-  /* ----------------------------------------------------------------------
-     Drag to pan
-     ---------------------------------------------------------------------- */
+  const openPicker = () => {
+    warm();
+    inputRef.current?.click();
+  };
+
+  /* ------------------------------------------------------------ drag / pan */
 
   const dragRef = useRef<{
     pointerId: number;
     startX: number;
     startY: number;
+    moved: boolean;
     origin: Transform;
     rect: DOMRect;
   } | null>(null);
@@ -182,6 +207,7 @@ export default function Studio() {
       pointerId: e.pointerId,
       startX: e.clientX,
       startY: e.clientY,
+      moved: false,
       origin: transform,
       rect: canvas.getBoundingClientRect(),
     };
@@ -191,9 +217,9 @@ export default function Studio() {
     const drag = dragRef.current;
     if (!drag || !bitmap || drag.pointerId !== e.pointerId) return;
 
-    // Offsets are window fractions, so displayed pixels convert directly.
     const dx = (e.clientX - drag.startX) / drag.rect.width;
     const dy = (e.clientY - drag.startY) / drag.rect.height;
+    if (Math.abs(dx) > 0.004 || Math.abs(dy) > 0.004) drag.moved = true;
 
     const win = PHOTO_WINDOW[format];
     setTransform(
@@ -214,17 +240,20 @@ export default function Studio() {
     if (dragRef.current?.pointerId === e.pointerId) dragRef.current = null;
   };
 
+  const onCanvasClick = () => {
+    // The frame is the biggest thing on screen and reads as the button, so it
+    // opens the picker when empty. Once a photo is in, a click that didn't
+    // drag still means "change photo" — a tap on the image is never a pan.
+    if (!bitmap || !dragRef.current?.moved) openPicker();
+  };
+
   const onScaleChange = (scale: number) => {
     if (!bitmap) return;
     const win = PHOTO_WINDOW[format];
-    setTransform((t) =>
-      clampTransform(bitmap, { ...t, scale }, win.w, win.h),
-    );
+    setTransform((t) => clampTransform(bitmap, { ...t, scale }, win.w, win.h));
   };
 
-  /* ----------------------------------------------------------------------
-     Output
-     ---------------------------------------------------------------------- */
+  /* ---------------------------------------------------------------- output */
 
   const ensureBlob = useCallback(async (): Promise<Blob | null> => {
     if (exported) return exported;
@@ -248,17 +277,34 @@ export default function Studio() {
     downloadBlob(blob, fileNameFor(format, details.name));
   }, [ensureBlob, format, details.name]);
 
-  const buildOgBlob = useCallback(async (): Promise<Blob | null> => {
+  /**
+   * Images for the share link, as JPEG.
+   *
+   * The download stays PNG for quality, but the shared copies only ever get
+   * viewed inside an X card — and a 1.4MB PNG upload put a multi-second stall
+   * between tapping Share and X opening. JPEG at 0.9 is ~6x smaller with no
+   * visible difference at card size.
+   */
+  const buildShareBlobs = useCallback(async (): Promise<{
+    image: Blob;
+    og: Blob;
+  } | null> => {
     const source = canvasRef.current;
     if (!source) return null;
+
     const og = document.createElement("canvas");
     og.width = 1200;
     og.height = 630;
     const ctx = og.getContext("2d");
     if (!ctx) return null;
     renderOg(ctx, source, { ...details, title });
+
     try {
-      return await canvasToBlob(og);
+      const [image, ogBlob] = await Promise.all([
+        canvasToBlob(source, "image/jpeg", 0.9),
+        canvasToBlob(og, "image/jpeg", 0.9),
+      ]);
+      return { image, og: ogBlob };
     } catch {
       return null;
     }
@@ -267,123 +313,154 @@ export default function Studio() {
   const spec = FORMATS[format];
 
   return (
-    <>
-      <section className="tile-parchment px-5 pb-14 pt-8 sm:px-8 sm:pt-12 lg:tile">
-        <div className="mx-auto w-full max-w-[1100px]">
-          <FormatToggle value={format} onChange={setFormat} />
+    <div className="flex w-full flex-col items-center gap-7">
+      <input
+        ref={inputRef}
+        type="file"
+        // HEIC listed explicitly: iOS reports an empty MIME type for it, and
+        // without the extensions the picker greys those photos out.
+        accept="image/*,.heic,.heif,.HEIC,.HEIF"
+        className="sr-only"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) void handleFile(file);
+          e.target.value = "";
+        }}
+      />
 
-          {/* On mobile the upload lands directly under the hero — with the
-              preview first it sat at the fold, which buries the one action
-              every visitor came to take. On desktop it returns to the top of
-              the right column via explicit grid placement. */}
-          <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px] lg:items-start">
-            <div className="order-1 flex flex-col gap-4 lg:order-2 lg:col-start-2 lg:row-start-1">
-              <Dropzone
-                onFile={handleFile}
-                onIntent={warmDetector}
-                hasPhoto={Boolean(bitmap)}
-                busy={busy}
-              />
+      <FormatToggle value={format} onChange={setFormat} />
 
-              {error && (
-                <p
-                  role="alert"
-                  className="t-caption rounded-[11px] bg-[#fdeee9] px-4 py-3 text-[#a03412]"
-                >
-                  {error}
-                </p>
-              )}
-            </div>
+      {/* Preview — and, when empty, the primary upload target. */}
+      <div
+        className="relative w-full"
+        style={{ maxWidth: format === "pfp" ? 420 : 372 }}
+        onPointerEnter={warm}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragging(true);
+          warm();
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragging(false);
+          const file = e.dataTransfer.files?.[0];
+          if (file) void handleFile(file);
+        }}
+      >
+        <canvas
+          ref={canvasRef}
+          width={spec.width}
+          height={spec.height}
+          onClick={onCanvasClick}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={endDrag}
+          onPointerCancel={endDrag}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              openPicker();
+            }
+          }}
+          aria-label={
+            bitmap
+              ? `${spec.label} preview. Drag to reposition, or activate to change photo.`
+              : `${spec.label} preview. Activate to add your photo.`
+          }
+          className="product-shadow block h-auto w-full touch-none select-none transition-[transform,filter] duration-200"
+          style={{
+            borderRadius: format === "pfp" ? "50%" : 18,
+            cursor: bitmap ? "grab" : "pointer",
+            transform: dragging ? "scale(1.02)" : undefined,
+            filter: dragging ? "brightness(1.06)" : undefined,
+          }}
+        />
 
-            {/* Preview ------------------------------------------------- */}
-            <div className="order-2 flex flex-col items-center lg:order-1 lg:col-start-1 lg:row-start-1 lg:row-span-2">
-              <div
-                className="relative w-full"
-                style={{ maxWidth: format === "pfp" ? 520 : 460 }}
-              >
-                <canvas
-                  ref={canvasRef}
-                  width={spec.width}
-                  height={spec.height}
-                  onPointerDown={onPointerDown}
-                  onPointerMove={onPointerMove}
-                  onPointerUp={endDrag}
-                  onPointerCancel={endDrag}
-                  className="product-shadow block h-auto w-full touch-none select-none"
-                  style={{
-                    borderRadius: format === "pfp" ? "50%" : 18,
-                    cursor: bitmap ? "grab" : "default",
-                  }}
-                  aria-label={`${spec.label} preview`}
-                />
-                {busy && (
-                  <div className="absolute inset-0 grid place-items-center rounded-[inherit] bg-white/70">
-                    <span className="t-caption text-ink-muted-80">
-                      Reading photo…
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {bitmap && (
-                <p className="t-fine mt-4 text-center">
-                  {autoFramed
-                    ? "Framed on your face automatically — drag to adjust."
-                    : "Drag the image to reposition."}
-                </p>
-              )}
-            </div>
-
-            {/* Controls ------------------------------------------------ */}
-            <div className="order-3 flex flex-col gap-6 lg:col-start-2 lg:row-start-2">
-              {bitmap && (
-                <div>
-                  <label
-                    htmlFor="zoom"
-                    className="t-eyebrow mb-3 flex items-center justify-between"
-                  >
-                    <span>Zoom</span>
-                    <span className="tabular-nums">
-                      {Math.round(transform.scale * 100)}%
-                    </span>
-                  </label>
-                  <input
-                    id="zoom"
-                    type="range"
-                    className="slider"
-                    min={MIN_SCALE}
-                    max={MAX_SCALE}
-                    step={0.01}
-                    value={transform.scale}
-                    onChange={(e) => onScaleChange(Number(e.target.value))}
-                  />
-                </div>
-              )}
-
-              {format === "card" && (
-                <DetailFields
-                  details={details}
-                  title={title}
-                  onChange={setDetails}
-                  onReroll={() => setTitleSalt((s) => s + 1)}
-                />
-              )}
-
-              <ShareBar
-                disabled={!bitmap}
-                format={format}
-                details={{ ...details, title }}
-                blob={exported}
-                getBlob={ensureBlob}
-                getOgBlob={buildOgBlob}
-                onDownload={handleDownload}
-                onError={setError}
-              />
-            </div>
+        {status && (
+          <div
+            className="absolute inset-0 grid place-items-center rounded-[inherit] backdrop-blur-[2px]"
+            style={{ background: "rgba(245,245,247,0.55)" }}
+          >
+            <span className="t-caption-strong">{status}</span>
           </div>
+        )}
+      </div>
+
+      {/* One action at a time — nothing disabled is ever on screen. */}
+      {!bitmap ? (
+        <div className="flex flex-col items-center gap-2">
+          <button type="button" className="btn btn-primary" onClick={openPicker}>
+            Add your photo
+          </button>
+          <p className="t-fine">or drop one in — JPG, PNG, HEIC, WebP</p>
         </div>
-      </section>
-    </>
+      ) : (
+        <div className="flex w-full max-w-[420px] flex-col gap-6">
+          <div>
+            <label
+              htmlFor="zoom"
+              className="t-eyebrow mb-1 flex items-center justify-between"
+            >
+              <span>{autoFramed ? "Framed on your face" : "Position"}</span>
+              <span className="tabular-nums">
+                {Math.round(transform.scale * 100)}%
+              </span>
+            </label>
+            <input
+              id="zoom"
+              type="range"
+              className="slider"
+              min={MIN_SCALE}
+              max={MAX_SCALE}
+              step={0.01}
+              value={transform.scale}
+              onChange={(e) => onScaleChange(Number(e.target.value))}
+            />
+            <p className="t-fine -mt-1">Drag the image to reposition it.</p>
+          </div>
+
+          {format === "card" && (
+            <DetailFields
+              details={details}
+              title={title}
+              onChange={setDetails}
+              onReroll={() => setTitleSalt((s) => s + 1)}
+            />
+          )}
+
+          <ShareBar
+            format={format}
+            details={{ ...details, title }}
+            blob={exported}
+            getBlob={ensureBlob}
+            getShareBlobs={buildShareBlobs}
+            onDownload={handleDownload}
+            onError={setError}
+          />
+
+          <button
+            type="button"
+            onClick={openPicker}
+            className="t-caption mx-auto underline underline-offset-4"
+            style={{ color: "var(--ink-muted-48)" }}
+          >
+            Use a different photo
+          </button>
+        </div>
+      )}
+
+      {error && (
+        <p
+          role="alert"
+          className="t-caption w-full max-w-[420px] rounded-[11px] bg-[#fdeee9] px-4 py-3 text-center text-[#a03412]"
+        >
+          {error}
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -404,73 +481,56 @@ function DetailFields({
     onChange({ ...details, [key]: e.target.value });
 
   return (
-    <div className="flex flex-col gap-4">
-      <div>
-        <label htmlFor="name" className="t-eyebrow mb-2 block">
-          Name
-        </label>
-        <input
-          id="name"
-          className="field"
-          value={details.name}
-          onChange={set("name")}
-          placeholder="Sanket Marathe"
-          autoComplete="name"
-          maxLength={40}
-        />
-      </div>
-
+    <div className="flex flex-col gap-3">
+      <input
+        className="field"
+        value={details.name}
+        onChange={set("name")}
+        placeholder="Your name"
+        aria-label="Your name"
+        autoComplete="name"
+        maxLength={40}
+      />
       <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label htmlFor="role" className="t-eyebrow mb-2 block">
-            Role
-          </label>
-          <input
-            id="role"
-            className="field"
-            value={details.role}
-            onChange={set("role")}
-            placeholder="Backend"
-            maxLength={28}
-          />
-        </div>
-        <div>
-          <label htmlFor="stack" className="t-eyebrow mb-2 block">
-            Stack
-          </label>
-          <input
-            id="stack"
-            className="field"
-            value={details.stack}
-            onChange={set("stack")}
-            placeholder="Rust · Postgres"
-            maxLength={28}
-          />
-        </div>
-      </div>
-
-      <div>
-        <label htmlFor="handle" className="t-eyebrow mb-2 block">
-          X handle
-        </label>
         <input
-          id="handle"
           className="field"
-          value={details.handle}
-          onChange={set("handle")}
-          placeholder="@yourhandle"
-          maxLength={20}
+          value={details.role}
+          onChange={set("role")}
+          placeholder="Role"
+          aria-label="Role"
+          maxLength={28}
+        />
+        <input
+          className="field"
+          value={details.stack}
+          onChange={set("stack")}
+          placeholder="Stack"
+          aria-label="Stack"
+          maxLength={28}
         />
       </div>
+      <input
+        className="field"
+        value={details.handle}
+        onChange={set("handle")}
+        placeholder="@handle"
+        aria-label="X handle"
+        maxLength={20}
+      />
 
-      <div>
-        <span className="t-eyebrow mb-2 block">Builder title</span>
-        <div className="flex items-center gap-3">
-          <p className="t-body-strong flex-1">{title}</p>
-          <button type="button" className="btn btn-quiet" onClick={onReroll}>
-            Reroll
-          </button>
+      <div className="flex items-center justify-between gap-3 pt-1">
+        <div className="min-w-0">
+          <span className="t-eyebrow block">Builder title</span>
+          <p className="t-body-strong truncate">{title}</p>
         </div>
+        <button
+          type="button"
+          className="t-caption shrink-0 underline underline-offset-4"
+          style={{ color: "var(--accent)" }}
+          onClick={onReroll}
+        >
+          Reroll
+        </button>
       </div>
     </div>
   );
