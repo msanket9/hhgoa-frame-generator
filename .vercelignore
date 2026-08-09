@@ -1,0 +1,5 @@
+# Dev-only artifacts — the harness reads these locally and they must never
+# ship. The /dev route renders nothing in production anyway.
+.devsnaps/
+public/testphotos/
+public/devshares/
