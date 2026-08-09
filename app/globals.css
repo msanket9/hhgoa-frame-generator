@@ -249,6 +249,48 @@ body {
 }
 
 /* ---------------------------------------------------------------------------
+   Segmented control
+
+   The platform control, not a pair of branded pills: a quiet grey track with a
+   white selected thumb. Using the accent here made the toggle the loudest
+   thing on the page and stole attention from the artifact.
+   --------------------------------------------------------------------------- */
+
+.segmented {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  background: rgba(120, 120, 128, 0.12);
+  border-radius: 10px;
+}
+
+.segmented > button {
+  min-height: 34px;
+  padding: 7px 18px;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink-muted-80);
+  font-size: 0.824rem;
+  font-weight: 600;
+  letter-spacing: -0.224px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.18s ease, color 0.18s ease;
+}
+
+.segmented > button[aria-selected="true"] {
+  background: var(--canvas);
+  color: var(--ink);
+  /* Hairline instead of a shadow — shadow stays reserved for the artifact. */
+  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.08);
+}
+
+.segmented > button:focus-visible {
+  outline: 2px solid var(--accent-focus);
+  outline-offset: 2px;
+}
+
+/* ---------------------------------------------------------------------------
    Surfaces
    --------------------------------------------------------------------------- */
 
