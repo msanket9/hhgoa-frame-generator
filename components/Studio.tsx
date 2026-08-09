@@ -422,14 +422,13 @@ export default function Studio() {
             <p className="t-fine -mt-1">Drag the image to reposition it.</p>
           </div>
 
-          {format === "card" && (
-            <DetailFields
-              details={details}
-              title={title}
-              onChange={setDetails}
-              onReroll={() => setTitleSalt((s) => s + 1)}
-            />
-          )}
+          <DetailFields
+            format={format}
+            details={details}
+            title={title}
+            onChange={setDetails}
+            onReroll={() => setTitleSalt((s) => s + 1)}
+          />
 
           <ShareBar
             format={format}
@@ -467,11 +466,13 @@ export default function Studio() {
 /* ------------------------------------------------------------------------ */
 
 function DetailFields({
+  format,
   details,
   title,
   onChange,
   onReroll,
 }: {
+  format: FormatId;
   details: Details;
   title: string;
   onChange: (d: Details) => void;
@@ -480,43 +481,53 @@ function DetailFields({
   const set = (key: keyof Details) => (e: React.ChangeEvent<HTMLInputElement>) =>
     onChange({ ...details, [key]: e.target.value });
 
+  const isCard = format === "card";
+
   return (
     <div className="flex flex-col gap-3">
+      {/* Shown for both formats. The profile frame doesn't print a name, but
+          the share link's card and landing page do — without this, every
+          shared avatar reads as an anonymous "A builder". */}
       <input
         className="field"
         value={details.name}
         onChange={set("name")}
-        placeholder="Your name"
+        placeholder={isCard ? "Your name" : "Your name (for the share card)"}
         aria-label="Your name"
         autoComplete="name"
         maxLength={40}
       />
-      <div className="grid grid-cols-2 gap-3">
-        <input
-          className="field"
-          value={details.role}
-          onChange={set("role")}
-          placeholder="Role"
-          aria-label="Role"
-          maxLength={28}
-        />
-        <input
-          className="field"
-          value={details.stack}
-          onChange={set("stack")}
-          placeholder="Stack"
-          aria-label="Stack"
-          maxLength={28}
-        />
-      </div>
-      <input
-        className="field"
-        value={details.handle}
-        onChange={set("handle")}
-        placeholder="@handle"
-        aria-label="X handle"
-        maxLength={20}
-      />
+
+      {isCard && (
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            <input
+              className="field"
+              value={details.role}
+              onChange={set("role")}
+              placeholder="Role"
+              aria-label="Role"
+              maxLength={28}
+            />
+            <input
+              className="field"
+              value={details.stack}
+              onChange={set("stack")}
+              placeholder="Stack"
+              aria-label="Stack"
+              maxLength={28}
+            />
+          </div>
+          <input
+            className="field"
+            value={details.handle}
+            onChange={set("handle")}
+            placeholder="@handle"
+            aria-label="X handle"
+            maxLength={20}
+          />
+        </>
+      )}
 
       <div className="flex items-center justify-between gap-3 pt-1">
         <div className="min-w-0">
