@@ -84,6 +84,16 @@ export default function Studio() {
   const [error, setError] = useState<string | null>(null);
   const [autoFramed, setAutoFramed] = useState(false);
   const [dragging, setDragging] = useState(false);
+  /**
+   * Whether the canvas owns touch gestures.
+   *
+   * It used to always own them (touch-action: none) so drag-to-pan worked —
+   * which meant a finger landing anywhere on the artifact, i.e. most of a phone
+   * screen, silently killed page scrolling. People reasonably concluded the
+   * page was broken. Now the canvas scrolls like any other element until the
+   * user explicitly asks to adjust.
+   */
+  const [adjusting, setAdjusting] = useState(false);
   const [exported, setExported] = useState<Blob | null>(null);
 
   const warmed = useRef(false);
@@ -189,6 +199,7 @@ export default function Studio() {
           return decoded.bitmap;
         });
         setTransform({ scale: 1, offsetX: 0, offsetY: 0 });
+        setAdjusting(false);
         setStatus(null);
 
         const win = PHOTO_WINDOW[format];
@@ -306,6 +317,9 @@ export default function Studio() {
 
   const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (!bitmap) return;
+    // A mouse has no scroll ambiguity — the wheel scrolls, the button drags —
+    // so pointer drags stay live there. Touch has to be asked for.
+    if (e.pointerType === "touch" && !adjusting) return;
     const canvas = e.currentTarget;
     canvas.setPointerCapture(e.pointerId);
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -363,7 +377,9 @@ export default function Studio() {
   };
 
   const onWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
-    if (!bitmap) return;
+    // Without this the wheel zoomed AND scrolled the page at the same time.
+    if (!bitmap || !adjusting) return;
+    e.preventDefault();
     const win = PHOTO_WINDOW[format];
     const next = Math.max(
       MIN_SCALE,
@@ -376,6 +392,7 @@ export default function Studio() {
     // The frame is the biggest thing on screen and reads as the button, so it
     // opens the picker when empty. After a photo is in, a tap that didn't pan
     // or pinch still means "change photo".
+    if (adjusting) return;
     if (!bitmap || !gesture.current?.moved) openPicker();
   };
 
@@ -450,7 +467,7 @@ export default function Studio() {
   const spec = FORMATS[format];
 
   return (
-    <div className="flex w-full flex-col items-center gap-7">
+    <div className="flex w-full flex-col items-center">
       <input
         ref={inputRef}
         type="file"
@@ -465,11 +482,18 @@ export default function Studio() {
         }}
       />
 
-      <FormatToggle value={format} onChange={setFormat} />
+      <h1 className="t-display mt-6 text-center">Less noise. More signal.</h1>
+      <p className="t-lead mt-2 text-center">
+        Drop a photo. Get your frame. Post it.
+      </p>
 
-      {/* Preview — and, when empty, the primary upload target. */}
+      <div className="mt-7">
+        <FormatToggle value={format} onChange={setFormat} />
+      </div>
+
+      {/* The exhibit ---------------------------------------------------- */}
       <div
-        className="relative w-full"
+        className="relative mt-9 w-full"
         style={{ maxWidth: format === "pfp" ? 420 : 372 }}
         onPointerEnter={warm}
         onDragOver={(e) => {
@@ -508,12 +532,15 @@ export default function Studio() {
               ? `${spec.label} preview. Drag to reposition, or activate to change photo.`
               : `${spec.label} preview. Activate to add your photo.`
           }
-          className="product-shadow block h-auto w-full touch-none select-none transition-[transform,filter] duration-200"
+          className="exhibit block h-auto w-full select-none transition-transform duration-200"
           style={{
-            borderRadius: format === "pfp" ? "50%" : 18,
-            cursor: bitmap ? "grab" : "pointer",
+            borderRadius: format === "pfp" ? "50%" : 20,
+            cursor: bitmap ? (adjusting ? "grab" : "pointer") : "pointer",
             transform: dragging ? "scale(1.02)" : undefined,
-            filter: dragging ? "brightness(1.06)" : undefined,
+            // pan-y, not none: the page must still scroll under a finger.
+            touchAction: adjusting ? "none" : "pan-y",
+            outline: adjusting ? "2px solid var(--accent)" : undefined,
+            outlineOffset: adjusting ? "6px" : undefined,
           }}
         />
 
@@ -521,46 +548,49 @@ export default function Studio() {
           <button
             type="button"
             onClick={() => setSide((v) => (v === "front" ? "back" : "front"))}
-            className="btn btn-quiet absolute -bottom-3 left-1/2 !min-h-0 -translate-x-1/2 !px-4 !py-2 !text-[0.76rem]"
-            style={{ boxShadow: "0 2px 10px rgba(0,0,0,.10)" }}
+            className="btn btn-bare absolute -bottom-11 left-1/2 -translate-x-1/2"
           >
-            {side === "front" ? "Show the back" : "Show the front"}
+            {side === "front" ? "Show the back →" : "← Show the front"}
           </button>
         )}
 
         {status && (
           <div
-            className="absolute inset-0 grid place-items-center rounded-[inherit] backdrop-blur-[2px]"
-            style={{ background: "rgba(245,245,247,0.55)" }}
+            className="absolute inset-0 grid place-items-center rounded-[inherit]"
+            style={{ background: "rgba(10,10,11,0.66)" }}
           >
-            <span className="t-caption-strong">{status}</span>
+            <span className="t-caption">{status}</span>
           </div>
         )}
       </div>
 
-      {/* One action at a time — nothing disabled is ever on screen. */}
+      {/* Wall text / actions -------------------------------------------- */}
       {!bitmap ? (
-        <div className="flex flex-col items-center gap-2">
+        <div className="mt-10 flex flex-col items-center gap-3">
           <button type="button" className="btn btn-primary" onClick={openPicker}>
             Add your photo
           </button>
           <p className="t-fine">or drop one in — JPG, PNG, HEIC, WebP</p>
         </div>
       ) : (
-        <div className="flex w-full max-w-[420px] flex-col gap-6">
-          <div>
-            <label
-              htmlFor="zoom"
-              className="t-eyebrow mb-1 flex items-center justify-between"
-            >
+        <div
+          className={`flex w-full flex-col items-center ${
+            format === "card" ? "mt-16" : "mt-10"
+          }`}
+          style={{ maxWidth: 380 }}
+        >
+          {/* Framing */}
+          <div className="w-full">
+            <div className="t-eyebrow flex items-center justify-between">
               <span>{autoFramed ? "Framed on your face" : "Position"}</span>
               <span className="tabular-nums">
                 {Math.round(transform.scale * 100)}%
               </span>
-            </label>
+            </div>
             <input
               id="zoom"
               type="range"
+              aria-label="Zoom"
               className="slider"
               min={MIN_SCALE}
               max={MAX_SCALE}
@@ -568,83 +598,63 @@ export default function Studio() {
               value={transform.scale}
               onChange={(e) => onScaleChange(Number(e.target.value))}
             />
-            <p className="t-fine -mt-1">
-              Drag to reposition · pinch or scroll to zoom
-            </p>
-
-            <div className="mt-3 flex gap-3">
+            <div className="-mt-1 flex items-center justify-between">
               <button
                 type="button"
-                className="btn btn-quiet flex-1"
-                onClick={handleRotate}
+                className="btn btn-bare"
+                onClick={() => setAdjusting((v) => !v)}
+                style={adjusting ? { color: "var(--accent)" } : undefined}
               >
-                Rotate 90°
+                {adjusting ? "Done" : "Adjust"}
               </button>
-              <button
-                type="button"
-                className="btn btn-quiet flex-1"
-                onClick={handleReset}
-              >
-                Recentre
-              </button>
+              <div className="flex">
+                <button type="button" className="btn btn-bare" onClick={handleRotate}>
+                  Rotate
+                </button>
+                <button type="button" className="btn btn-bare" onClick={handleReset}>
+                  Recentre
+                </button>
+              </div>
             </div>
+
+            {adjusting && (
+              <p className="t-fine mt-1" style={{ color: "var(--accent)" }}>
+                Drag to reposition · pinch or scroll to zoom · tap Done when
+                finished
+              </p>
+            )}
           </div>
 
-          <div>
-            <span className="t-eyebrow mb-2 block">Theme</span>
-            <div className="flex gap-2">
+          {/* Theme — colour is the label, so no boxes and no words */}
+          <div className="mt-9 flex w-full items-center justify-between">
+            <span className="t-eyebrow">Theme</span>
+            <div className="flex gap-3">
               {(Object.keys(THEMES) as ThemeId[]).map((id) => (
                 <button
                   key={id}
                   type="button"
-                  onClick={() => setTheme(id)}
+                  className="swatch"
                   aria-pressed={theme === id}
-                  className="flex flex-1 items-center justify-center gap-2 rounded-[11px] px-3 py-2.5 transition-colors"
-                  style={{
-                    border:
-                      theme === id
-                        ? "1.5px solid var(--accent)"
-                        : "1px solid var(--hairline)",
-                    background:
-                      theme === id
-                        ? "color-mix(in srgb, var(--accent) 6%, white)"
-                        : "var(--canvas)",
-                  }}
-                >
-                  <span
-                    className="h-4 w-4 shrink-0 rounded-full"
-                    style={{
-                      background: THEME_SWATCH[id],
-                      boxShadow: "inset 0 0 0 1px rgba(0,0,0,.12)",
-                    }}
-                  />
-                  <span className="t-caption-strong">{THEME_LABELS[id]}</span>
-                </button>
+                  aria-label={THEME_LABELS[id]}
+                  title={THEME_LABELS[id]}
+                  onClick={() => setTheme(id)}
+                  style={{ background: THEME_SWATCH[id] }}
+                />
               ))}
             </div>
           </div>
 
-          <div>
-            <span className="t-eyebrow mb-2 block">Photo look</span>
-            <div className="grid grid-cols-4 gap-2">
+          {/* Look — contrast marks the selection */}
+          <div className="mt-6 flex w-full items-center justify-between">
+            <span className="t-eyebrow">Look</span>
+            <div className="flex gap-4">
               {LOOK_ORDER.map((id) => (
                 <button
                   key={id}
                   type="button"
-                  onClick={() => setLook(id)}
+                  className="chip"
                   aria-pressed={look === id}
-                  className="t-caption rounded-[11px] px-2 py-2.5 transition-colors"
-                  style={{
-                    border:
-                      look === id
-                        ? "1.5px solid var(--accent)"
-                        : "1px solid var(--hairline)",
-                    background:
-                      look === id
-                        ? "color-mix(in srgb, var(--accent) 6%, white)"
-                        : "var(--canvas)",
-                    fontWeight: look === id ? 600 : 400,
-                  }}
+                  onClick={() => setLook(id)}
                 >
                   {LOOKS[id].label}
                 </button>
@@ -652,30 +662,33 @@ export default function Studio() {
             </div>
           </div>
 
-          <DetailFields
-            format={format}
-            details={details}
-            title={title}
-            onChange={setDetails}
-            onReroll={() => setTitleSalt((s) => s + 1)}
-          />
+          <div className="mt-8 w-full">
+            <DetailFields
+              format={format}
+              details={details}
+              title={title}
+              onChange={setDetails}
+              onReroll={() => setTitleSalt((s) => s + 1)}
+            />
+          </div>
 
-          <ShareBar
-            format={format}
-            details={{ ...details, title, shareUrl: share.url }}
-            shareId={share.id}
-            blob={exported}
-            getBlob={ensureBlob}
-            getShareBlobs={buildShareBlobs}
-            onDownload={handleDownload}
-            onError={setError}
-          />
+          <div className="mt-10 w-full">
+            <ShareBar
+              format={format}
+              details={{ ...details, title, shareUrl: share.url }}
+              shareId={share.id}
+              blob={exported}
+              getBlob={ensureBlob}
+              getShareBlobs={buildShareBlobs}
+              onDownload={handleDownload}
+              onError={setError}
+            />
+          </div>
 
           <button
             type="button"
             onClick={openPicker}
-            className="t-caption mx-auto underline underline-offset-4"
-            style={{ color: "var(--ink-muted-48)" }}
+            className="btn btn-bare mt-4"
           >
             Use a different photo
           </button>
@@ -685,7 +698,8 @@ export default function Studio() {
       {error && (
         <p
           role="alert"
-          className="t-caption w-full max-w-[420px] rounded-[11px] bg-[#fdeee9] px-4 py-3 text-center text-[#a03412]"
+          className="t-caption mt-6 w-full max-w-[380px] rounded-[12px] px-4 py-3 text-center"
+          style={{ background: "rgba(232,98,44,0.14)", color: "#ffb59a" }}
         >
           {error}
         </p>
@@ -760,17 +774,12 @@ function DetailFields({
         </>
       )}
 
-      <div className="flex items-center justify-between gap-3 pt-1">
+      <div className="flex items-center justify-between gap-3 pt-2">
         <div className="min-w-0">
           <span className="t-eyebrow block">Builder title</span>
-          <p className="t-body-strong truncate">{title}</p>
+          <p className="truncate text-[0.94rem] font-semibold">{title}</p>
         </div>
-        <button
-          type="button"
-          className="t-caption shrink-0 underline underline-offset-4"
-          style={{ color: "var(--accent)" }}
-          onClick={onReroll}
-        >
+        <button type="button" className="btn btn-bare shrink-0" onClick={onReroll}>
           Reroll
         </button>
       </div>

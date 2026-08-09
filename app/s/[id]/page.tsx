@@ -119,10 +119,8 @@ export default async function SharePage({
     <main className="flex flex-1 flex-col">
       {/* Near-black tile, not the brand green — the frame is itself green, and
           on a green field it would sit flat instead of reading as an object. */}
-      <section className="tile tile-dark flex flex-col items-center text-center">
-        <p className="t-eyebrow" style={{ color: "rgba(255,255,255,0.5)" }}>
-          Hacker House Goa · Oct 28–31, 2026
-        </p>
+      <section className="flex flex-col items-center px-5 pb-14 pt-10 text-center sm:pt-14">
+        <p className="t-eyebrow">Hacker House Goa · Oct 28–31, 2026</p>
 
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
@@ -134,46 +132,42 @@ export default async function SharePage({
           }
           width={400}
           height={400}
-          className="product-shadow mt-8 w-full max-w-[360px] rounded-full"
+          className="exhibit mt-9 w-full max-w-[420px] rounded-full"
         />
 
         {/* With no name — the profile-frame path doesn't ask for one — the
             builder title carries the heading rather than a hollow placeholder. */}
         {who ? (
           <>
-            <h1 className="t-display mt-9">{who}</h1>
+            <h1 className="t-display mt-10">{who}</h1>
             {frame.title && (
-              <p
-                className="t-tagline mt-2"
-                style={{ color: "var(--accent-on-dark)" }}
-              >
+              <p className="t-lead mt-2" style={{ color: "var(--accent)" }}>
                 {frame.title}
               </p>
             )}
           </>
         ) : (
-          <h1
-            className="t-display mt-9"
-            style={{ color: "var(--accent-on-dark)" }}
-          >
+          <h1 className="t-display mt-10" style={{ color: "var(--accent)" }}>
             {frame.title || "Building in Goa"}
           </h1>
         )}
 
-        <p className="t-caption mt-4" style={{ color: "var(--body-muted)" }}>
-          Less noise. More signal.
-        </p>
+        <p className="t-fine mt-4">Less noise. More signal.</p>
       </section>
 
       {/* The reason this page exists: everyone arriving from X is a visitor who
           hasn't made one yet. */}
-      <section className="tile flex flex-col items-center text-center">
+      <section className="flex flex-col items-center px-5 pb-16 text-center">
+        <div
+          className="mb-12 h-px w-full max-w-[380px]"
+          style={{ background: "var(--hairline-soft)" }}
+        />
         <h2 className="t-display">Make your own.</h2>
         <p className="t-lead mt-3 max-w-[30ch] text-balance">
           Drop a photo. Get your frame. Post it.
         </p>
 
-        <Link href="/" className="btn btn-primary mt-8">
+        <Link href="/" className="btn btn-primary mt-7">
           Create your frame
         </Link>
 
@@ -182,16 +176,12 @@ export default async function SharePage({
         </p>
       </section>
 
-      <footer
-        className="px-5 py-8 text-center"
-        style={{ background: "var(--canvas-parchment)" }}
-      >
+      <footer className="px-5 pb-10 text-center">
         <p className="t-fine">
           Unofficial fan-made tool ·{" "}
           <a
             href="https://hhgoa.com"
             className="underline underline-offset-2"
-            style={{ color: "var(--ink-muted-48)" }}
             target="_blank"
             rel="noopener noreferrer"
           >

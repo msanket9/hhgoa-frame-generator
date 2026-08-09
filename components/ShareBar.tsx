@@ -123,14 +123,10 @@ export default function ShareBar({
       </button>
 
       <div className="flex gap-3">
-        <button
-          type="button"
-          className="btn btn-secondary flex-1"
-          onClick={onDownload}
-        >
+        <button type="button" className="btn btn-ghost flex-1" onClick={onDownload}>
           Download
         </button>
-        <button type="button" className="btn btn-quiet flex-1" onClick={handleCopy}>
+        <button type="button" className="btn btn-ghost flex-1" onClick={handleCopy}>
           {copied ? "Copied" : "Copy image"}
         </button>
       </div>
@@ -139,8 +135,7 @@ export default function ShareBar({
         <button
           type="button"
           onClick={handleNativeShare}
-          className="t-caption mx-auto underline underline-offset-4"
-          style={{ color: "var(--ink-muted-48)" }}
+          className="btn btn-bare mx-auto"
         >
           Share the image file instead
         </button>

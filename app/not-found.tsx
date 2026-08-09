@@ -8,8 +8,7 @@ import Link from "next/link";
 export default function NotFound() {
   return (
     <main
-      className="flex flex-1 flex-col items-center justify-center px-5 py-20 text-center"
-      style={{ background: "var(--canvas-parchment)" }}
+      className="flex flex-1 flex-col items-center justify-center px-5 py-24 text-center"
     >
       <p className="t-eyebrow">Hacker House Goa · Oct 28–31, 2026</p>
 
@@ -21,7 +20,7 @@ export default function NotFound() {
         The link may be mistyped, or the frame was never finished.
       </p>
 
-      <Link href="/" className="btn btn-primary mt-9">
+      <Link href="/" className="btn btn-primary mt-8">
         Make your own
       </Link>
 
