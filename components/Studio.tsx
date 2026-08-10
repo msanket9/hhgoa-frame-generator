@@ -37,6 +37,7 @@ import { titleFor } from "@/lib/titles";
 
 import FormatToggle from "./FormatToggle";
 import ShareBar from "./ShareBar";
+import { EnvelopeIcon } from "./illustrations";
 
 const EMPTY_DETAILS: Details = {
   name: "",
@@ -612,18 +613,13 @@ export default function Studio() {
         }}
       />
 
-      <h1 className="t-display mt-6 text-center">Less noise. More signal.</h1>
-      <p className="t-lead mt-2 text-center">
-        Drop a photo. Get your frame. Post it.
-      </p>
-
-      <div className="mt-7">
-        <FormatToggle value={format} onChange={setFormat} />
-      </div>
+      {/* The page's own hero already carries the headline; Studio starts
+          straight at the tool so there's no duplicate title stacked here. */}
+      <FormatToggle value={format} onChange={setFormat} />
 
       {/* The exhibit ---------------------------------------------------- */}
       <div
-        className="relative mt-9 w-full"
+        className="anim-pop relative mt-9 w-full"
         style={{ maxWidth: format === "pfp" ? 420 : 372 }}
         onPointerEnter={warm}
         onDragOver={(e) => {
@@ -687,24 +683,26 @@ export default function Studio() {
         {status && (
           <div
             className="absolute inset-0 grid place-items-center rounded-[inherit]"
-            style={{ background: "rgba(10,10,11,0.66)" }}
+            style={{ background: "rgba(247,241,224,0.88)" }}
           >
-            <span className="t-caption">{status}</span>
+            <span className="t-caption t-mono font-semibold" style={{ color: "var(--green)" }}>
+              {status}
+            </span>
           </div>
         )}
       </div>
 
       {/* Wall text / actions -------------------------------------------- */}
       {!bitmap ? (
-        <div className="mt-10 flex flex-col items-center gap-3">
-          <button type="button" className="btn btn-primary" onClick={openPicker}>
-            Add your photo
+        <div className="anim-rise delay-1 mt-10 flex flex-col items-center gap-3">
+          <button type="button" className="btn btn-stamp" onClick={openPicker}>
+            <EnvelopeIcon /> Add your photo
           </button>
           <p className="t-fine">or drop one in — JPG, PNG, HEIC, WebP</p>
         </div>
       ) : (
         <div
-          className={`flex w-full flex-col items-center ${
+          className={`card anim-rise flex w-full flex-col items-center px-5 py-6 sm:px-7 ${
             format === "card" ? "mt-16" : "mt-10"
           }`}
           style={{ maxWidth: 380 }}
@@ -838,8 +836,12 @@ export default function Studio() {
       {error && (
         <p
           role="alert"
-          className="t-caption mt-6 w-full max-w-[380px] rounded-[12px] px-4 py-3 text-center"
-          style={{ background: "rgba(232,98,44,0.14)", color: "#ffb59a" }}
+          className="t-caption mt-6 w-full max-w-[380px] rounded-[12px] border-[1.5px] px-4 py-3 text-center font-semibold"
+          style={{
+            background: "#fff0f4",
+            borderColor: "var(--pink)",
+            color: "#c2185b",
+          }}
         >
           {error}
         </p>

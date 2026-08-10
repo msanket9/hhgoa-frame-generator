@@ -1,30 +1,69 @@
 @import "tailwindcss";
 
 /* ---------------------------------------------------------------------------
-   Dark gallery.
+   Frame in Goa — illustrated parchment.
 
-   The room is dark so the object is the only lit thing. Every control is
-   built from opacity and spacing rather than borders — an earlier pass stacked
-   bordered widgets under the artifact and the page read as a form with a
-   picture on top, which is the opposite of the intent.
+   Full pivot from the earlier dark-gallery chrome: warm cream stage, the
+   event's own green/pink/gold, hand-built vector illustration (palms, a
+   beach hut, waves, postmark stamps) instead of photography, and real motion
+   instead of static panels. The generated frame/card itself keeps its own
+   theme system (lib/render/themes.ts) untouched — this is the site around it.
    --------------------------------------------------------------------------- */
 
+@font-face {
+  font-family: "HH Display";
+  src: url("/fonts/playfair-display.woff2") format("woff2");
+  font-weight: 700 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "HH Mono";
+  src: url("/fonts/plex-mono-400.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "HH Mono";
+  src: url("/fonts/plex-mono-600.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
-  --accent: #e8622c;
-  --accent-focus: #ff7a45;
+  --green: #0b4b2c;
+  --green-deep: #073620;
+  --green-80: rgba(11, 75, 44, 0.8);
+  --green-60: rgba(11, 75, 44, 0.6);
+  --green-40: rgba(11, 75, 44, 0.4);
+  --green-18: rgba(11, 75, 44, 0.18);
+  --green-10: rgba(11, 75, 44, 0.1);
+
+  --pink: #ff1f6b;
+  --gold: #f9a825;
+  --yellow: #ffd400;
+  --orange: #e8622c;
+
+  --cream: #f7f1e0;
+  --cream-deep: #efe6cc;
+  --paper: #fbf7ea;
+
+  --accent: var(--pink);
+  --accent-focus: #ff4785;
   --on-accent: #ffffff;
 
-  /* Room */
-  --canvas: #0a0a0b;
-  --surface-raised: #141416;
+  --ink: var(--green-deep);
+  --ink-70: var(--green-80);
+  --ink-45: var(--green-60);
+  --ink-28: var(--green-40);
+  --hairline: var(--green-18);
+  --hairline-soft: var(--green-10);
 
-  /* Light on dark, as an opacity ladder rather than a set of greys. */
-  --ink: #f6f5f3;
-  --ink-70: rgba(246, 245, 243, 0.7);
-  --ink-45: rgba(246, 245, 243, 0.45);
-  --ink-28: rgba(246, 245, 243, 0.28);
-  --hairline: rgba(246, 245, 243, 0.14);
-  --hairline-soft: rgba(246, 245, 243, 0.08);
+  --canvas: var(--cream);
 }
 
 @theme inline {
@@ -35,10 +74,15 @@
   --color-ink-45: var(--ink-45);
   --color-ink-28: var(--ink-28);
   --color-canvas: var(--canvas);
-  --color-raised: var(--surface-raised);
+  --color-green: var(--green);
+  --color-pink: var(--pink);
+  --color-gold: var(--gold);
+  --color-yellow: var(--yellow);
 
   --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
     "Helvetica Neue", Arial, sans-serif;
+  --font-display: "HH Display", Georgia, "Times New Roman", serif;
+  --font-mono: "HH Mono", ui-monospace, "SF Mono", Menlo, monospace;
 
   --radius-sm: 8px;
   --radius-md: 12px;
@@ -48,7 +92,7 @@
 html {
   font-size: 17px;
   -webkit-text-size-adjust: 100%;
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -57,6 +101,7 @@ html {
   *::after {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 
@@ -65,68 +110,98 @@ body {
   color: var(--ink);
   font-family: var(--font-sans);
   font-size: 1rem;
-  line-height: 1.47;
-  letter-spacing: -0.374px;
+  line-height: 1.5;
+  letter-spacing: -0.1px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  position: relative;
 }
 
 /* ---------------------------------------------------------------------------
-   Type — quiet header, so scale belongs to the artifact
+   Texture — a halftone dot field standing in for print/riso texture.
+   Pure CSS: two offset radial-gradient dot grids, no image asset.
+   --------------------------------------------------------------------------- */
+
+.dot-field {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    radial-gradient(var(--green-18) 1.1px, transparent 1.6px),
+    radial-gradient(var(--green-10) 1.1px, transparent 1.6px);
+  background-size: 22px 22px, 22px 22px;
+  background-position: 0 0, 11px 11px;
+  mask-image: linear-gradient(to bottom, black, black 60%, transparent 100%);
+}
+
+/* ---------------------------------------------------------------------------
+   Type
    --------------------------------------------------------------------------- */
 
 .t-display {
-  font-size: clamp(1.6rem, 4.5vw, 2.1rem);
-  font-weight: 600;
-  line-height: 1.1;
-  letter-spacing: -0.02em;
+  font-family: var(--font-display);
+  font-size: clamp(2.4rem, 7vw, 4.2rem);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.t-display-sm {
+  font-family: var(--font-display);
+  font-size: clamp(1.6rem, 4vw, 2.2rem);
+  font-weight: 800;
+  line-height: 1.05;
+  color: var(--ink);
 }
 
 .t-lead {
   font-size: clamp(1rem, 2.2vw, 1.18rem);
   font-weight: 400;
-  line-height: 1.35;
-  letter-spacing: -0.01em;
+  line-height: 1.5;
   color: var(--ink-70);
 }
 
 .t-caption {
   font-size: 0.824rem;
   line-height: 1.43;
-  letter-spacing: -0.224px;
+  letter-spacing: -0.1px;
 }
 
 .t-fine {
   font-size: 0.735rem;
   line-height: 1.4;
-  letter-spacing: -0.1px;
   color: var(--ink-45);
 }
 
-/* The one place tracking goes positive — at this size negative closes it up. */
 .t-eyebrow {
-  font-size: 0.676rem;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
   font-weight: 600;
   line-height: 1;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--ink-45);
+  color: var(--ink-70);
+}
+
+.t-mono {
+  font-family: var(--font-mono);
+  letter-spacing: 0.02em;
 }
 
 /* ---------------------------------------------------------------------------
-   The exhibit
+   The exhibit — the generated artifact, resting on the parchment stage
    --------------------------------------------------------------------------- */
 
-/* Depth plus a breath of the artifact's own warmth spilling onto the wall.
-   Kept low — a coloured halo reads as cheap the moment it's visible as a halo. */
 .exhibit {
   box-shadow:
-    0 40px 90px -20px rgba(0, 0, 0, 0.8),
-    0 0 130px -30px rgba(232, 98, 44, 0.32);
+    6px 8px 0 var(--green),
+    0 30px 60px -25px rgba(11, 75, 44, 0.45);
+  transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.25s ease;
 }
 
 /* ---------------------------------------------------------------------------
-   Buttons — one solid accent, everything else a ghost
+   Buttons
    --------------------------------------------------------------------------- */
 
 .btn {
@@ -138,8 +213,8 @@ body {
   padding: 12px 26px;
   border-radius: 9999px;
   font-size: 0.94rem;
-  font-weight: 600;
-  letter-spacing: -0.2px;
+  font-weight: 700;
+  letter-spacing: -0.1px;
   cursor: pointer;
   white-space: nowrap;
   user-select: none;
@@ -148,7 +223,8 @@ body {
     color 0.2s ease,
     border-color 0.2s ease,
     opacity 0.2s ease,
-    transform 0.1s ease;
+    transform 0.12s cubic-bezier(0.3, 1.4, 0.6, 1),
+    box-shadow 0.2s ease;
 }
 
 .btn:active:not(:disabled) {
@@ -156,7 +232,7 @@ body {
 }
 
 .btn:focus-visible {
-  outline: 2px solid var(--accent-focus);
+  outline: 3px solid var(--accent-focus);
   outline-offset: 3px;
 }
 
@@ -166,16 +242,30 @@ body {
 }
 
 .btn-primary {
-  background: var(--accent);
-  color: var(--on-accent);
+  background: var(--yellow);
+  color: var(--green-deep);
+  box-shadow: 3px 3px 0 var(--green);
 }
 
-/* Ghost: a hairline, no fill. Two filled buttons side by side was half the
-   reason the old control stack looked like a form. */
+.btn-primary:hover:not(:disabled) {
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 var(--green);
+}
+
+.btn-primary:active:not(:disabled) {
+  transform: translate(1px, 1px) scale(0.98);
+  box-shadow: 1px 1px 0 var(--green);
+}
+
 .btn-ghost {
-  background: transparent;
-  color: var(--ink-70);
-  border: 1px solid var(--hairline);
+  background: var(--paper);
+  color: var(--green);
+  border: 1.5px dashed var(--green-40);
+}
+
+.btn-ghost:hover:not(:disabled) {
+  border-color: var(--green);
+  background: var(--cream-deep);
 }
 
 .btn-bare {
@@ -184,8 +274,31 @@ body {
   border: none;
   min-height: 40px;
   padding: 8px 12px;
-  font-weight: 400;
+  font-weight: 600;
   font-size: 0.824rem;
+  box-shadow: none;
+}
+
+.btn-bare:hover:not(:disabled) {
+  color: var(--ink);
+}
+
+/* Stamp-cornered treatment for the primary CTA — echoes the postmark motif. */
+.btn-stamp {
+  position: relative;
+  border-radius: 6px;
+  background: var(--yellow);
+  color: var(--green-deep);
+  box-shadow: 3px 3px 0 var(--green);
+}
+
+.btn-stamp::before {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  border: 1.5px dashed rgba(11, 75, 44, 0.4);
+  border-radius: 3px;
+  pointer-events: none;
 }
 
 /* ---------------------------------------------------------------------------
@@ -194,29 +307,30 @@ body {
 
 .segmented {
   display: inline-flex;
-  gap: 2px;
-  padding: 3px;
-  background: rgba(246, 245, 243, 0.07);
-  border-radius: 11px;
+  gap: 3px;
+  padding: 4px;
+  background: var(--paper);
+  border: 1.5px solid var(--hairline);
+  border-radius: 12px;
 }
 
 .segmented > button {
   min-height: 34px;
   padding: 7px 20px;
-  border-radius: 8px;
+  border-radius: 9px;
   background: transparent;
   color: var(--ink-45);
   font-size: 0.824rem;
-  font-weight: 600;
-  letter-spacing: -0.2px;
+  font-weight: 700;
+  letter-spacing: -0.1px;
   white-space: nowrap;
   cursor: pointer;
-  transition: background-color 0.18s ease, color 0.18s ease;
+  transition: background-color 0.18s ease, color 0.18s ease, transform 0.15s ease;
 }
 
 .segmented > button[aria-selected="true"] {
-  background: rgba(246, 245, 243, 0.12);
-  color: var(--ink);
+  background: var(--green);
+  color: var(--cream);
 }
 
 .segmented > button:focus-visible {
@@ -225,21 +339,20 @@ body {
 }
 
 /* ---------------------------------------------------------------------------
-   Inputs — a baseline, not a box
+   Inputs
    --------------------------------------------------------------------------- */
 
 .field {
   width: 100%;
   min-height: 44px;
-  padding: 10px 2px;
-  background: transparent;
+  padding: 10px 12px;
+  background: var(--paper);
   color: var(--ink);
-  border: none;
-  border-bottom: 1px solid var(--hairline);
-  border-radius: 0;
+  border: 1.5px solid var(--hairline);
+  border-radius: var(--radius-sm);
   font-size: 0.94rem;
-  letter-spacing: -0.2px;
-  transition: border-color 0.18s ease;
+  letter-spacing: -0.1px;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
 .field::placeholder {
@@ -248,7 +361,8 @@ body {
 
 .field:focus {
   outline: none;
-  border-bottom-color: var(--accent);
+  border-color: var(--pink);
+  box-shadow: 0 0 0 3px rgba(255, 31, 107, 0.14);
 }
 
 /* ---------------------------------------------------------------------------
@@ -265,13 +379,13 @@ body {
 }
 
 .slider::-webkit-slider-runnable-track {
-  height: 2px;
+  height: 4px;
   border-radius: 9999px;
   background: var(--hairline);
 }
 
 .slider::-moz-range-track {
-  height: 2px;
+  height: 4px;
   border-radius: 9999px;
   background: var(--hairline);
 }
@@ -279,20 +393,22 @@ body {
 .slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
-  background: var(--ink);
-  border: none;
+  background: var(--pink);
+  border: 3px solid var(--paper);
+  box-shadow: 0 1px 4px rgba(11, 75, 44, 0.3);
   margin-top: -8px;
 }
 
 .slider::-moz-range-thumb {
-  width: 18px;
-  height: 18px;
-  border: none;
+  width: 20px;
+  height: 20px;
+  border: 3px solid var(--paper);
   border-radius: 50%;
-  background: var(--ink);
+  background: var(--pink);
+  box-shadow: 0 1px 4px rgba(11, 75, 44, 0.3);
 }
 
 .slider:focus-visible {
@@ -301,7 +417,7 @@ body {
 }
 
 /* ---------------------------------------------------------------------------
-   Swatches / chips — selection shown by contrast, never by a box
+   Swatches / chips
    --------------------------------------------------------------------------- */
 
 .swatch {
@@ -309,15 +425,16 @@ body {
   height: 30px;
   border-radius: 50%;
   cursor: pointer;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
-  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  box-shadow: inset 0 0 0 1.5px rgba(11, 75, 44, 0.25);
+  transition: transform 0.18s cubic-bezier(0.3, 1.4, 0.6, 1), box-shadow 0.18s ease;
 }
 
 .swatch[aria-pressed="true"] {
   box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.25),
-    0 0 0 2px var(--canvas),
-    0 0 0 4px var(--accent);
+    inset 0 0 0 1.5px rgba(11, 75, 44, 0.3),
+    0 0 0 2px var(--paper),
+    0 0 0 4px var(--pink);
+  transform: scale(1.08);
 }
 
 .swatch:focus-visible {
@@ -326,23 +443,126 @@ body {
 }
 
 .chip {
-  padding: 8px 4px;
-  background: transparent;
-  border: none;
-  color: var(--ink-45);
-  font-size: 0.824rem;
-  letter-spacing: -0.2px;
+  padding: 8px 12px;
+  background: var(--paper);
+  border: 1.5px solid var(--hairline);
+  border-radius: 9999px;
+  color: var(--ink-70);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: -0.1px;
   cursor: pointer;
-  transition: color 0.18s ease;
+  transition: color 0.18s ease, background-color 0.18s ease, border-color 0.18s ease;
 }
 
 .chip[aria-pressed="true"] {
-  color: var(--ink);
-  font-weight: 600;
+  color: var(--green-deep);
+  background: var(--gold);
+  border-color: var(--gold);
+  font-weight: 700;
 }
 
 .chip:focus-visible {
   outline: 2px solid var(--accent-focus);
   outline-offset: 3px;
-  border-radius: 6px;
+}
+
+/* ---------------------------------------------------------------------------
+   Cards — a real bordered surface this time, on purpose: the illustrated
+   language reads as "postcards on a table," not "quiet chrome."
+   --------------------------------------------------------------------------- */
+
+.card {
+  background: var(--paper);
+  border: 1.5px solid var(--hairline);
+  border-radius: var(--radius-lg);
+}
+
+.card-dashed {
+  background: var(--paper);
+  border: 1.5px dashed var(--green-40);
+  border-radius: var(--radius-lg);
+}
+
+/* ---------------------------------------------------------------------------
+   Wave divider — a hand-drawn horizon between sections
+   --------------------------------------------------------------------------- */
+
+.wave-divider {
+  display: block;
+  width: 100%;
+  height: 28px;
+}
+
+/* ---------------------------------------------------------------------------
+   Motion
+   --------------------------------------------------------------------------- */
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pop-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.94) translateY(10px);
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes drift {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-10px) rotate(-2deg);
+  }
+}
+
+@keyframes bob {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+.anim-rise {
+  animation: rise-in 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.anim-pop {
+  animation: pop-in 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.anim-drift {
+  animation: drift 6s ease-in-out infinite;
+}
+
+.anim-bob {
+  animation: bob 4s ease-in-out infinite;
+}
+
+.delay-1 {
+  animation-delay: 0.08s;
+}
+.delay-2 {
+  animation-delay: 0.16s;
+}
+.delay-3 {
+  animation-delay: 0.24s;
 }

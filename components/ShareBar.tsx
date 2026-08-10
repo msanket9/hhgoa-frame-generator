@@ -14,6 +14,8 @@ import {
   uploadForShare,
 } from "@/lib/share";
 
+import { EnvelopeIcon } from "./illustrations";
+
 export default function ShareBar({
   format,
   details,
@@ -122,11 +124,15 @@ export default function ShareBar({
     <div className="flex flex-col gap-3">
       <button
         type="button"
-        className="btn btn-primary w-full"
+        className="btn btn-stamp w-full"
         onClick={handleShare}
         disabled={sharing}
       >
-        {sharing ? "Opening X…" : "Share to X"}
+        {sharing ? "Opening X…" : (
+          <>
+            <EnvelopeIcon /> Share to X
+          </>
+        )}
       </button>
 
       <div className="flex gap-3">

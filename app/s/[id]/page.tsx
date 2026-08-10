@@ -4,6 +4,9 @@ import { notFound } from "next/navigation";
 
 import { BlobNotFoundError, head } from "@vercel/blob";
 
+import SiteHeader from "@/components/SiteHeader";
+import { PalmTree, Waves } from "@/components/illustrations";
+
 /**
  * Always rendered fresh.
  *
@@ -121,58 +124,73 @@ export default async function SharePage({
   const who = frame.name?.trim();
 
   return (
-    <main className="flex flex-1 flex-col">
-      {/* Near-black tile, not the brand green — the frame is itself green, and
-          on a green field it would sit flat instead of reading as an object. */}
-      <section className="flex flex-col items-center px-5 pb-14 pt-10 text-center sm:pt-14">
-        <p className="t-eyebrow">Hacker House Goa · Oct 28–31, 2026</p>
+    <main className="flex flex-1 flex-col overflow-x-hidden">
+      <SiteHeader />
 
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={frame.image}
-          alt={
-            who
-              ? `${who}'s Hacker House Goa 2026 frame`
-              : "A Hacker House Goa 2026 frame"
-          }
-          width={400}
-          height={400}
-          className="exhibit mt-9 w-full max-w-[420px] rounded-full"
+      <section className="relative overflow-hidden">
+        <div className="dot-field" aria-hidden />
+        <PalmTree className="anim-drift pointer-events-none absolute -left-6 top-8 h-32 w-auto opacity-80 sm:h-44" />
+        <PalmTree
+          className="anim-drift pointer-events-none absolute -right-4 top-4 h-28 w-auto scale-x-[-1] opacity-70 sm:h-40"
+          color="var(--pink)"
         />
 
-        {/* With no name — the profile-frame path doesn't ask for one — the
-            builder title carries the heading rather than a hollow placeholder. */}
-        {who ? (
-          <>
-            <h1 className="t-display mt-10">{who}</h1>
-            {frame.title && (
-              <p className="t-lead mt-2" style={{ color: "var(--accent)" }}>
-                {frame.title}
-              </p>
-            )}
-          </>
-        ) : (
-          <h1 className="t-display mt-10" style={{ color: "var(--accent)" }}>
-            {frame.title || "Building in Goa"}
-          </h1>
-        )}
+        <div className="relative flex flex-col items-center px-5 pb-12 pt-10 text-center sm:pt-14">
+          <p className="anim-rise t-eyebrow">Hacker House Goa · Oct 28–31, 2026</p>
 
-        <p className="t-fine mt-4">Less noise. More signal.</p>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={frame.image}
+            alt={
+              who
+                ? `${who}'s Hacker House Goa 2026 frame`
+                : "A Hacker House Goa 2026 frame"
+            }
+            width={400}
+            height={400}
+            className="exhibit anim-pop delay-1 mt-8 w-full max-w-[380px] rounded-full"
+          />
+
+          {/* With no name — the profile-frame path doesn't ask for one — the
+              builder title carries the heading rather than a hollow placeholder. */}
+          {who ? (
+            <>
+              <h1 className="anim-rise delay-2 t-display mt-9 !text-[clamp(1.8rem,5vw,2.6rem)]">
+                {who}
+              </h1>
+              {frame.title && (
+                <p
+                  className="anim-rise delay-2 t-lead mt-2"
+                  style={{ color: "var(--pink)" }}
+                >
+                  {frame.title}
+                </p>
+              )}
+            </>
+          ) : (
+            <h1
+              className="anim-rise delay-2 t-display mt-9 !text-[clamp(1.8rem,5vw,2.6rem)]"
+              style={{ color: "var(--pink)" }}
+            >
+              {frame.title || "Building in Goa"}
+            </h1>
+          )}
+
+          <p className="t-fine mt-3">Less noise. More signal.</p>
+        </div>
+
+        <Waves className="relative block w-full" color="var(--green)" />
       </section>
 
-      {/* The reason this page exists: everyone arriving from X is a visitor who
-          hasn't made one yet. */}
-      <section className="flex flex-col items-center px-5 pb-16 text-center">
-        <div
-          className="mb-12 h-px w-full max-w-[380px]"
-          style={{ background: "var(--hairline-soft)" }}
-        />
-        <h2 className="t-display">Make your own.</h2>
+      {/* The reason this page exists: everyone arriving from X is a visitor
+          who hasn't made one yet. */}
+      <section className="flex flex-col items-center px-5 py-14 text-center">
+        <h2 className="t-display-sm">Make your own.</h2>
         <p className="t-lead mt-3 max-w-[30ch] text-balance">
           Drop a photo. Get your frame. Post it.
         </p>
 
-        <Link href="/" className="btn btn-primary mt-7">
+        <Link href="/" className="btn btn-stamp mt-7">
           Create your frame
         </Link>
 
@@ -181,12 +199,14 @@ export default async function SharePage({
         </p>
       </section>
 
-      <footer className="px-5 pb-10 text-center">
-        <p className="t-fine">
+      <Waves className="block w-full rotate-180" color="var(--pink)" />
+      <footer className="px-5 py-10 text-center" style={{ background: "var(--green)" }}>
+        <p className="t-fine" style={{ color: "rgba(247,241,224,0.6)" }}>
           Unofficial fan-made tool ·{" "}
           <a
             href="https://hhgoa.com"
             className="underline underline-offset-2"
+            style={{ color: "var(--cream)" }}
             target="_blank"
             rel="noopener noreferrer"
           >
