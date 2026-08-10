@@ -7,6 +7,11 @@ import type { Transform } from "./types";
  * from a sane framing, which is the whole point of not making people crop
  * before they upload.
  */
+/**
+ * Draws `bitmap` as given — colour grading, if any, has already been baked
+ * into it upstream (see lib/render/grade.ts) rather than applied here via
+ * `ctx.filter`, which WebKit has never implemented on any platform.
+ */
 export function drawPhoto(
   ctx: CanvasRenderingContext2D,
   bitmap: ImageBitmap,
@@ -15,7 +20,6 @@ export function drawPhoto(
   y: number,
   w: number,
   h: number,
-  filter = "none",
 ): void {
   const cover = Math.max(w / bitmap.width, h / bitmap.height);
   const scale = cover * transform.scale;
@@ -27,12 +31,7 @@ export function drawPhoto(
   const cx = x + w / 2 + transform.offsetX * w;
   const cy = y + h / 2 + transform.offsetY * h;
 
-  // Scoped save/restore: the grade must apply to the photo only, never to the
-  // frame furniture drawn after it.
-  ctx.save();
-  if (filter && filter !== "none") ctx.filter = filter;
   ctx.drawImage(bitmap, cx - drawW / 2, cy - drawH / 2, drawW, drawH);
-  ctx.restore();
 }
 
 /**

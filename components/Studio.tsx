@@ -11,6 +11,8 @@ import {
   rotateBitmap,
 } from "@/lib/decode";
 import { canvasToBlob, downloadBlob, fileNameFor } from "@/lib/export";
+import { IDENTITY_MATRIX } from "@/lib/render/colormatrix";
+import { gradeBitmap } from "@/lib/render/grade";
 import { renderOg } from "@/lib/render/og";
 import {
   FORMATS,
@@ -131,9 +133,75 @@ export default function Studio() {
     [details.title, details.name, titleSalt],
   );
 
+  /**
+   * Colour-graded copy of `bitmap` for the current look, computed once per
+   * (photo, look) pair and reused for every subsequent draw.
+   *
+   * This exists instead of drawing with `ctx.filter` because that API is
+   * unimplemented in WebKit on every platform (see colormatrix.ts) — every
+   * iPhone browser is WebKit underneath, so `ctx.filter` silently no-ops
+   * there. Grading ahead of time and caching the result also means the
+   * per-frame drag/zoom path stays a plain, fast `drawImage` regardless.
+   *
+   * All paths — including the cache-hit fast path — resolve through the
+   * nested async function rather than calling setState as a top-level
+   * statement of the effect body: React's hooks lint (correctly) flags the
+   * latter as "this should be a value computed during render," and reading
+   * the cache ref during render isn't allowed either. Routing everything
+   * through one async function matches the pattern React's own docs use for
+   * effects that fetch/derive external data.
+   */
+  const [gradedBitmap, setGradedBitmap] = useState<ImageBitmap | null>(null);
+  const gradeCache = useRef<Map<LookId, ImageBitmap>>(new Map());
+
+  // A new source photo invalidates every previously graded variant of the
+  // old one.
+  useEffect(() => {
+    const cache = gradeCache.current;
+    return () => {
+      for (const b of cache.values()) b.close();
+      cache.clear();
+    };
+  }, [bitmap]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      if (!bitmap) {
+        setGradedBitmap(null);
+        return;
+      }
+      const matrix = LOOKS[look].matrix;
+      if (matrix === IDENTITY_MATRIX) {
+        setGradedBitmap(null); // "as shot" — draw the source bitmap directly
+        return;
+      }
+
+      const cached = gradeCache.current.get(look);
+      const graded = cached ?? (await gradeBitmap(bitmap, matrix));
+
+      if (cancelled) {
+        // Only close a bitmap we just made — a cache hit is owned by the
+        // cache and may still be in use elsewhere.
+        if (!cached) graded.close();
+        return;
+      }
+      if (!cached) gradeCache.current.set(look, graded);
+      setGradedBitmap(graded);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [bitmap, look]);
+
   const renderState: RenderState = useMemo(
     () => ({
-      bitmap,
+      // Falls back to the raw bitmap while a non-identity grade is still
+      // computing, so there's no blank flash on the first frame after
+      // switching looks.
+      bitmap: gradedBitmap ?? bitmap,
       transform,
       details: { ...details, title, shareUrl: share.url },
       theme,
@@ -141,7 +209,18 @@ export default function Studio() {
       // The profile frame has no reverse; only the ID card flips.
       side: format === "card" ? side : "front",
     }),
-    [bitmap, transform, details, title, share.url, theme, look, side, format],
+    [
+      gradedBitmap,
+      bitmap,
+      transform,
+      details,
+      title,
+      share.url,
+      theme,
+      look,
+      side,
+      format,
+    ],
   );
 
   /* ---------------------------------------------------------------- render */

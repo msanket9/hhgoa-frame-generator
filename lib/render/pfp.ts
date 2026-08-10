@@ -7,7 +7,6 @@ import {
   rampConic,
   rampLinear,
 } from "./brand";
-import { LOOKS } from "./looks";
 import { drawPhoto } from "./photo";
 import { THEMES } from "./themes";
 import type { RenderState } from "./types";
@@ -78,7 +77,6 @@ function drawPhotoWindow(
       CENTER - R_INNER,
       R_INNER * 2,
       R_INNER * 2,
-      LOOKS[state.look].filter,
     );
   } else {
     ctx.fillStyle = P.deep;

@@ -12,7 +12,6 @@ import {
   withAlpha,
   wordmark,
 } from "./brand";
-import { LOOKS } from "./looks";
 import { drawPhoto } from "./photo";
 import { THEMES, type Palette } from "./themes";
 import type { RenderState } from "./types";
@@ -111,7 +110,6 @@ function drawPhotoPanel(
       PHOTO_Y,
       INNER,
       PHOTO_H,
-      LOOKS[state.look].filter,
     );
   } else {
     ctx.fillStyle = P.deep;

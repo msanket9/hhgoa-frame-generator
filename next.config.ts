@@ -49,6 +49,10 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // Vercel's edge already strips this on what we've deployed, but that's
+  // platform behavior this config shouldn't depend on — set it here so it's
+  // true regardless of where this ever gets hosted.
+  poweredByHeader: false,
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },
