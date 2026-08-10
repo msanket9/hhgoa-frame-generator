@@ -783,8 +783,8 @@ export default function Studio() {
           </div>
 
           {/* Look — contrast marks the selection */}
-          <div className="mt-6 flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <span className="t-eyebrow">Look</span>
+          <div className="mt-6 flex w-full flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <span className="t-eyebrow sm:pt-2">Look</span>
             <div className="flex flex-wrap gap-3 sm:justify-end">
               {LOOK_ORDER.map((id) => (
                 <button
