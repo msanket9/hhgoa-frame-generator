@@ -1,14 +1,19 @@
 /**
- * Share to X.
+ * Sharing, platform by platform.
  *
- * X web intents cannot attach media — there is no parameter for it. So there
- * are exactly two ways to get the actual graphic into a post, and which one is
- * available depends entirely on the device:
+ * None of these web intents can attach media — there is no parameter for it
+ * on any of them. So there are exactly two ways to get the actual graphic
+ * into a post, and which one is available depends entirely on the device:
  *
- *   mobile   navigator.share({ files }) hands the PNG to the X app directly.
+ *   mobile   navigator.share({ files }) hands the PNG to an app directly.
  *   desktop  upload, then post a link whose OG card renders the graphic.
  *
- * Both are implemented. Neither alone covers the brief.
+ * Both are implemented. Neither alone covers the brief. The per-platform
+ * intent URLs below (X, WhatsApp, Facebook) all take the second path, and
+ * all three are genuine deep links — opened as a real top-level navigation on
+ * a phone with the app installed, each one hands off into that app already
+ * composing, not into its mobile website. Instagram has no such intent on
+ * any platform (see copyTextToClipboard below for what that means here).
  */
 
 /**
@@ -102,6 +107,44 @@ export function intentUrl(pageUrl: string, text = SHARE_TEXT): string {
   const params = new URLSearchParams({ text });
   if (pageUrl) params.set("url", pageUrl);
   return `https://x.com/intent/tweet?${params.toString()}`;
+}
+
+/**
+ * WhatsApp's own share link — one URL for every surface. `wa.me` detects the
+ * platform itself: it deep-links into the app on iOS/Android when installed,
+ * and opens WhatsApp Web on desktop. The page link rides along in the message
+ * text so the OG card still carries the image, same as everywhere else.
+ */
+export function whatsappUrl(text: string, pageUrl: string): string {
+  const full = pageUrl ? `${text}\n${pageUrl}` : text;
+  return `https://wa.me/?text=${encodeURIComponent(full)}`;
+}
+
+/**
+ * Facebook's sharer only ever consumes the URL for its preview card — the
+ * `quote`/caption parameters it used to accept were deprecated years ago as
+ * an anti-abuse measure. There's no way to hand it caption text; the person
+ * sharing has to type their own.
+ */
+export function facebookShareUrl(pageUrl: string): string {
+  return `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(pageUrl)}`;
+}
+
+/**
+ * Instagram has no share intent at all — not a web endpoint, not a URL
+ * scheme, on any platform. There's nothing to deep-link into with content
+ * attached, by Meta's design rather than any missing credential. The best an
+ * outside site can do is stage the two pieces — caption and photo — and hand
+ * the person off to paste them in once Instagram opens.
+ */
+export async function copyTextToClipboard(text: string): Promise<boolean> {
+  try {
+    if (!navigator.clipboard?.writeText) return false;
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**

@@ -283,6 +283,48 @@ body {
   color: var(--ink);
 }
 
+/* Per-platform share row — same dashed language as .btn-ghost, sized down to
+   an icon-only circle since the row carries four of them side by side. */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--paper);
+  color: var(--green);
+  border: 1.5px dashed var(--green-40);
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.18s ease, background-color 0.18s ease;
+}
+
+.icon-btn svg {
+  width: 19px;
+  height: 19px;
+}
+
+.icon-btn:hover:not(:disabled) {
+  border-color: var(--green);
+  background: var(--cream-deep);
+  transform: translateY(-1px);
+}
+
+.icon-btn:active:not(:disabled) {
+  transform: scale(0.94);
+}
+
+.icon-btn:focus-visible {
+  outline: 2px solid var(--accent-focus);
+  outline-offset: 3px;
+}
+
+.icon-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 /* Stamp-cornered treatment for the primary CTA — echoes the postmark motif. */
 .btn-stamp {
   position: relative;

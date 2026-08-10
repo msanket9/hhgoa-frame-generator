@@ -9,12 +9,23 @@ import {
   blobToFile,
   canShareFiles,
   copyImageToClipboard,
+  copyTextToClipboard,
+  facebookShareUrl,
   intentUrl,
   shareFile,
   uploadForShare,
+  whatsappUrl,
 } from "@/lib/share";
 
 import { EnvelopeIcon } from "./illustrations";
+import {
+  FacebookGlyph,
+  InstagramGlyph,
+  WhatsAppGlyph,
+  XGlyph,
+} from "./SocialIcons";
+
+type PlatformKey = "share" | "x" | "whatsapp" | "facebook" | "instagram";
 
 export default function ShareBar({
   format,
@@ -37,9 +48,15 @@ export default function ShareBar({
   onDownload: () => void;
   onError: (message: string) => void;
 }) {
-  const [sharing, setSharing] = useState(false);
+  const [busy, setBusy] = useState<PlatformKey | null>(null);
   const [copied, setCopied] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
   const filename = fileNameFor(format, details.name);
+
+  const showNote = (text: string) => {
+    setNote(text);
+    setTimeout(() => setNote(null), 3200);
+  };
 
   /**
    * Native share is tried first, not as a fallback.
@@ -49,7 +66,8 @@ export default function ShareBar({
    * ("failed to load content") — a link-preview fetch with real failure modes
    * (cold start, redirect, timeout) sitting between the tap and the post.
    * navigator.share() skips all of that: iOS and Android hand the photo file
-   * straight to X's composer, already attached, nothing to fetch.
+   * straight to whichever app the person picks in the OS sheet, already
+   * attached, nothing to fetch.
    *
    * MUST be the very first thing this function does, with no `await` before
    * it — Safari drops user-activation across an await, so share() has to run
@@ -70,16 +88,25 @@ export default function ShareBar({
       }
     }
 
-    await shareViaLink();
+    await openViaLink((pageUrl) => intentUrl(pageUrl), "share");
   };
 
-  /** Desktop, and the rare mobile fallback above: a link with a real OG card. */
-  const shareViaLink = async () => {
+  /**
+   * Shared by every per-platform button: upload once, then hand the
+   * resulting page link to that platform's own share URL. Each of these is a
+   * genuine deep link — opened as a real top-level navigation on a phone
+   * with the app installed, X/WhatsApp/Facebook all hand off into the app
+   * itself already composing, not into the mobile website.
+   */
+  const openViaLink = async (
+    buildUrl: (pageUrl: string) => string,
+    key: PlatformKey,
+  ) => {
     // Opened synchronously where possible; popup blockers reject a
     // window.open that happens after an await. No `noopener` — that makes
     // window.open return null, and the handle is what we redirect below.
     const popup = window.open("about:blank", "_blank");
-    setSharing(true);
+    setBusy(key);
 
     try {
       const shots = await getShareBlobs();
@@ -90,19 +117,40 @@ export default function ShareBar({
         name: details.name,
         title: details.title,
       });
-      const url = intentUrl(pageUrl);
+      const url = buildUrl(pageUrl);
 
       if (popup && !popup.closed) popup.location.href = url;
       else window.location.href = url;
     } catch {
-      // Still get them to X with the caption ready; they can attach the
-      // downloaded image themselves rather than hitting a dead end.
-      const fallback = intentUrl("");
+      // Still get them to the platform with the caption ready; they can
+      // attach the downloaded image themselves rather than hitting a dead end.
+      const fallback = buildUrl("");
       if (popup && !popup.closed) popup.location.href = fallback;
       else window.location.href = fallback;
       onError("Couldn't upload the image — download it and attach it to the post.");
     } finally {
-      setSharing(false);
+      setBusy(null);
+    }
+  };
+
+  /**
+   * Instagram has no share intent anywhere — not a web endpoint, not a URL
+   * scheme. There's nothing to hand it pre-filled, by Meta's design. The best
+   * this can do is stage both pieces and open the app to paste into.
+   */
+  const handleInstagram = async () => {
+    setBusy("instagram");
+    try {
+      const copiedCaption = await copyTextToClipboard(SHARE_TEXT);
+      onDownload();
+      window.open("https://www.instagram.com/", "_blank", "noopener,noreferrer");
+      showNote(
+        copiedCaption
+          ? "Caption copied, photo downloading — paste both into Instagram."
+          : "Photo downloading — attach it in Instagram and add #FrameInGoa yourself.",
+      );
+    } finally {
+      setBusy(null);
     }
   };
 
@@ -126,11 +174,11 @@ export default function ShareBar({
         type="button"
         className="btn btn-stamp w-full"
         onClick={handleShare}
-        disabled={sharing}
+        disabled={busy !== null}
       >
-        {sharing ? "Opening X…" : (
+        {busy === "share" ? "Opening…" : (
           <>
-            <EnvelopeIcon /> Share to X
+            <EnvelopeIcon /> Share
           </>
         )}
       </button>
@@ -142,6 +190,59 @@ export default function ShareBar({
         <button type="button" className="btn btn-ghost flex-1" onClick={handleCopy}>
           {copied ? "Copied" : "Copy image"}
         </button>
+      </div>
+
+      <div className="mt-1 flex flex-col items-center gap-2.5">
+        <span className="t-fine">Or straight to</span>
+        <div className="flex gap-3">
+          <button
+            type="button"
+            className="icon-btn"
+            aria-label="Share to X"
+            title="Share to X"
+            onClick={() => openViaLink((pageUrl) => intentUrl(pageUrl), "x")}
+            disabled={busy !== null}
+          >
+            <XGlyph />
+          </button>
+          <button
+            type="button"
+            className="icon-btn"
+            aria-label="Share to WhatsApp"
+            title="Share to WhatsApp"
+            onClick={() =>
+              openViaLink((pageUrl) => whatsappUrl(SHARE_TEXT, pageUrl), "whatsapp")
+            }
+            disabled={busy !== null}
+          >
+            <WhatsAppGlyph />
+          </button>
+          <button
+            type="button"
+            className="icon-btn"
+            aria-label="Share to Facebook"
+            title="Share to Facebook"
+            onClick={() => openViaLink((pageUrl) => facebookShareUrl(pageUrl), "facebook")}
+            disabled={busy !== null}
+          >
+            <FacebookGlyph />
+          </button>
+          <button
+            type="button"
+            className="icon-btn"
+            aria-label="Prep for Instagram"
+            title="Copy caption, download photo, open Instagram"
+            onClick={handleInstagram}
+            disabled={busy !== null}
+          >
+            <InstagramGlyph />
+          </button>
+        </div>
+        {note && (
+          <p className="t-fine text-center" style={{ color: "var(--green)" }}>
+            {note}
+          </p>
+        )}
       </div>
     </div>
   );
