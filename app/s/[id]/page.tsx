@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { head } from "@vercel/blob";
+import { BlobNotFoundError, head } from "@vercel/blob";
 
 /**
  * Always rendered fresh.
@@ -56,8 +56,13 @@ async function getFrame(id: string): Promise<Frame | null> {
     try {
       const frame = await read();
       if (frame) return frame;
-    } catch {
-      /* fall through to retry */
+    } catch (err) {
+      // A genuinely missing blob (typo'd link, id that was never uploaded)
+      // isn't transient — retrying it three times just adds ~750ms of
+      // latency and three extra Blob API calls to what should be an instant
+      // 404. Only retry errors that might actually resolve on a second try.
+      const code = (err as NodeJS.ErrnoException | undefined)?.code;
+      if (err instanceof BlobNotFoundError || code === "ENOENT") return null;
     }
     if (attempt < 2) await new Promise((r) => setTimeout(r, 250 * (attempt + 1)));
   }

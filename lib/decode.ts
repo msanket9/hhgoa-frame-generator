@@ -14,6 +14,19 @@ export const MAX_UPLOAD_BYTES = 40 * 1024 * 1024;
  */
 const MAX_EDGE = 1600;
 
+/**
+ * Sanity ceiling on a *decoded* bitmap's long edge, checked before any resize
+ * math runs on it.
+ *
+ * A file can be small in bytes but decode to an enormous bitmap (a crafted
+ * PNG can claim tens of thousands of pixels per side for a few KB on disk) —
+ * the classic decompression-bomb shape. Browsers already cap this somewhat,
+ * but there's real headroom below that cap where the tab would still hang
+ * doing the resize. This bounds it explicitly rather than trusting that
+ * every downstream consumer would degrade gracefully.
+ */
+const MAX_DECODED_EDGE = 12000;
+
 const HEIC_EXT = /\.(heic|heif)$/i;
 const SUPPORTED_EXT = /\.(jpe?g|png|webp|gif|bmp|avif|heic|heif)$/i;
 
@@ -138,7 +151,22 @@ export async function decodeImage(file: File): Promise<DecodedImage> {
     }
   }
 
+  // A zero-dimension bitmap (corrupt file, truncated stream) turns into
+  // Infinity/NaN in every downstream cover-fit calculation — better to fail
+  // here with a clear message than let drawImage throw an opaque error deep
+  // in the render path.
+  if (probe.width < 1 || probe.height < 1) {
+    probe.close();
+    throw new DecodeError("That image couldn't be read.");
+  }
+
   const longEdge = Math.max(probe.width, probe.height);
+
+  if (longEdge > MAX_DECODED_EDGE) {
+    probe.close();
+    throw new DecodeError("That image's resolution is too large to use.");
+  }
+
   if (longEdge <= MAX_EDGE) {
     return { bitmap: probe, width: probe.width, height: probe.height };
   }

@@ -33,10 +33,15 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#ffffff",
-  // The canvas supports drag-to-pan; letting the page zoom under the gesture
-  // makes that feel broken on iOS.
-  maximumScale: 1,
+  // Was #ffffff, left over from before the dark-gallery redesign — showed a
+  // white status/nav bar against the near-black page on mobile Safari/Chrome.
+  themeColor: "#0a0a0b",
+  // No maximumScale lock: that used to be here to stop the page zooming under
+  // the canvas's own drag-to-pan gesture, but the canvas now scopes its touch
+  // handling to an explicit "Adjust" mode (touch-action switches per state)
+  // instead of capturing all touch input all the time. Locking page zoom
+  // globally was collateral damage — it fails WCAG 1.4.4 (users must be able
+  // to zoom to 200%) — and the scoped fix means it's no longer needed here.
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

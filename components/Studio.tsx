@@ -96,11 +96,34 @@ export default function Studio() {
   const [adjusting, setAdjusting] = useState(false);
   const [exported, setExported] = useState<Blob | null>(null);
 
+  // Guards handleFile/handleRotate against being stomped by a stale, still-
+  // resolving call from before it. Without it, selecting two photos in quick
+  // succession (or double-tapping Rotate) can let an earlier decode finish
+  // last and overwrite — or worse, .close() — the bitmap the newer call just
+  // committed.
+  const opId = useRef(0);
+
   const warmed = useRef(false);
   const warm = useCallback(() => {
     if (warmed.current) return;
     warmed.current = true;
     warmDetector();
+  }, []);
+
+  // ImageBitmap holds decoded pixel data outside the JS heap (GPU/CPU-backed);
+  // it's only ever freed by our own .close() calls elsewhere, none of which
+  // fire on unmount. A ref mirrors the latest bitmap so this effect's cleanup
+  // can release whatever's current without depending on `bitmap` itself and
+  // re-subscribing on every photo change. The mirroring happens in its own
+  // effect, not inline during render — mutating a ref while rendering is
+  // unsafe under React 19's concurrent rendering (a render can be thrown away
+  // or run twice) and the lint rule for it is not optional.
+  const bitmapRef = useRef<ImageBitmap | null>(null);
+  useEffect(() => {
+    bitmapRef.current = bitmap;
+  }, [bitmap]);
+  useEffect(() => {
+    return () => bitmapRef.current?.close();
   }, []);
 
   const title = useMemo(
@@ -181,6 +204,11 @@ export default function Studio() {
         return;
       }
 
+      // Claimed before the first await, so a second call (double-drop, or
+      // picking again before this one finishes) invalidates this one instead
+      // of racing it — see the `opId` comment above.
+      const myOp = ++opId.current;
+
       // HEIC on a non-Safari browser pays a one-off wasm decode, which is the
       // only path slow enough to need naming — say what's happening rather
       // than showing a generic spinner.
@@ -191,6 +219,14 @@ export default function Studio() {
 
       try {
         const decoded = await decodeImage(file);
+
+        if (myOp !== opId.current) {
+          // A newer upload already won; this one lost the race. Free the
+          // bitmap we just decoded rather than leaking it, and touch nothing
+          // else — the newer call owns state now.
+          decoded.bitmap.close();
+          return;
+        }
 
         // Show the centre crop immediately; auto-framing refines it a beat
         // later. Waiting on the detector here would make upload feel slow.
@@ -204,6 +240,7 @@ export default function Studio() {
 
         const win = PHOTO_WINDOW[format];
         const result = await autoFrame(decoded.bitmap, win.w, win.h);
+        if (myOp !== opId.current) return;
         if (result.foundFace) {
           setTransform(
             clampTransform(decoded.bitmap, result.transform, win.w, win.h),
@@ -211,6 +248,7 @@ export default function Studio() {
           setAutoFramed(true);
         }
       } catch (err) {
+        if (myOp !== opId.current) return;
         setStatus(null);
         setError(
           err instanceof DecodeError
@@ -256,8 +294,21 @@ export default function Studio() {
 
   const handleRotate = useCallback(async () => {
     if (!bitmap) return;
+    const myOp = ++opId.current;
     setStatus("Rotating…");
     const rotated = await rotateBitmap(bitmap, 1);
+
+    if (myOp !== opId.current) {
+      // Superseded — e.g. a second Rotate tap landed, or a new photo was
+      // dropped, before this turn finished. Without this check, two rapid
+      // taps both read the same pre-rotation `bitmap` from their closures and
+      // each apply a single 90° turn to it — the second tap's result silently
+      // overwrites the first's instead of compounding, so two taps produce a
+      // 90° result instead of 180°.
+      rotated.close();
+      return;
+    }
+
     setBitmap((prev) => {
       if (prev && prev !== rotated) prev.close();
       return rotated;
@@ -608,10 +659,20 @@ export default function Studio() {
                 {adjusting ? "Done" : "Adjust"}
               </button>
               <div className="flex">
-                <button type="button" className="btn btn-bare" onClick={handleRotate}>
+                <button
+                  type="button"
+                  className="btn btn-bare"
+                  onClick={handleRotate}
+                  disabled={status !== null}
+                >
                   Rotate
                 </button>
-                <button type="button" className="btn btn-bare" onClick={handleReset}>
+                <button
+                  type="button"
+                  className="btn btn-bare"
+                  onClick={handleReset}
+                  disabled={status !== null}
+                >
                   Recentre
                 </button>
               </div>

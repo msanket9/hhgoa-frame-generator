@@ -39,30 +39,43 @@ export default function ShareBar({
   const [copied, setCopied] = useState(false);
   const filename = fileNameFor(format, details.name);
 
-  // Computed once during render, not in an effect: this component only ever
-  // mounts client-side (after a photo exists), so there's no hydration to
-  // mismatch and no need for a cascading state update.
-  const [canShareNatively] = useState(() =>
-    canShareFiles(
-      new File([new Blob([], { type: "image/png" })], "probe.png", {
-        type: "image/png",
-      }),
-    ),
-  );
-
   /**
-   * Primary action: open X directly with the caption pre-filled.
+   * Native share is tried first, not as a fallback.
    *
-   * navigator.share() was the primary path and that was wrong — it opens the
-   * OS share sheet, so the user has to hunt for X. The intent URL opens X
-   * itself on desktop and deep-links straight into the app on mobile, which is
-   * what "Share to X" should obviously do. The image rides along as the link's
-   * OG card.
+   * X's own web intent has to unfurl our /s/id page to build its link card,
+   * and that step is exactly what was failing inside X's in-app browser
+   * ("failed to load content") — a link-preview fetch with real failure modes
+   * (cold start, redirect, timeout) sitting between the tap and the post.
+   * navigator.share() skips all of that: iOS and Android hand the photo file
+   * straight to X's composer, already attached, nothing to fetch.
+   *
+   * MUST be the very first thing this function does, with no `await` before
+   * it — Safari drops user-activation across an await, so share() has to run
+   * in the same tick as the click. That's also why it depends on `blob`
+   * already being exported ahead of time rather than encoding on demand.
    */
   const handleShare = async () => {
-    // Opened synchronously: a window.open after an await is blocked. And no
-    // `noopener` here — it makes window.open return null, so the handle we
-    // need to redirect would never exist.
+    if (blob) {
+      const file = blobToFile(blob, filename);
+      if (canShareFiles(file)) {
+        const result = await shareFile(file, SHARE_TEXT);
+        // "cancelled" = the user closed the sheet on purpose; leave them there
+        // rather than bouncing them into a second, different share flow.
+        if (result === "shared" || result === "cancelled") return;
+        // "unsupported" (Web Share rejected the file for some reason, e.g. an
+        // over-large payload on some Android builds) falls through to the
+        // link path below.
+      }
+    }
+
+    await shareViaLink();
+  };
+
+  /** Desktop, and the rare mobile fallback above: a link with a real OG card. */
+  const shareViaLink = async () => {
+    // Opened synchronously where possible; popup blockers reject a
+    // window.open that happens after an await. No `noopener` — that makes
+    // window.open return null, and the handle is what we redirect below.
     const popup = window.open("about:blank", "_blank");
     setSharing(true);
 
@@ -89,12 +102,6 @@ export default function ShareBar({
     } finally {
       setSharing(false);
     }
-  };
-
-  /** Secondary: hand the actual PNG to the OS sheet (mobile). */
-  const handleNativeShare = () => {
-    if (!blob) return;
-    void shareFile(blobToFile(blob, filename), SHARE_TEXT);
   };
 
   const handleCopy = async () => {
@@ -130,16 +137,6 @@ export default function ShareBar({
           {copied ? "Copied" : "Copy image"}
         </button>
       </div>
-
-      {canShareNatively && (
-        <button
-          type="button"
-          onClick={handleNativeShare}
-          className="btn btn-bare mx-auto"
-        >
-          Share the image file instead
-        </button>
-      )}
     </div>
   );
 }
