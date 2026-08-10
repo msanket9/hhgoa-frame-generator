@@ -472,6 +472,67 @@ export function emptyPrompt(
 }
 
 /**
+ * Corner seal for the builder ID's photo — a compact echo of the profile
+ * frame's own ring (arc text over a conic sunset ramp, plus a medallion
+ * centre), scaled down and tilted like a wax seal stamped onto a postcard.
+ * Gives the ID card the same ownable "seal" device the profile frame already
+ * has, rather than inventing an unrelated one-off shape.
+ */
+export function cornerSeal(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  r: number,
+  palette: Palette,
+  opts: { rotation?: number } = {},
+): void {
+  const { rotation = -0.12 } = opts;
+
+  ctx.save();
+  ctx.translate(cx, cy);
+
+  // Shadow drawn before the tilt so it stays a plain drop, not a skewed one.
+  ctx.save();
+  ctx.shadowColor = "rgba(0, 0, 0, 0.35)";
+  ctx.shadowBlur = 20;
+  ctx.shadowOffsetY = 8;
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.fillStyle = palette.deep;
+  ctx.fill();
+  ctx.restore();
+
+  ctx.rotate(rotation);
+
+  ctx.beginPath();
+  ctx.arc(0, 0, r - 8, 0, Math.PI * 2);
+  ctx.lineWidth = 5;
+  ctx.strokeStyle = rampConic(ctx, palette, 0, 0);
+  ctx.stroke();
+
+  const textRadius = r - 24;
+  arcText(ctx, EVENT.dates, 0, 0, textRadius, -Math.PI / 2, {
+    font: font(600, r * 0.15, MONO, "ui-monospace, monospace"),
+    fill: palette.ink,
+    letterSpacing: 2,
+    outward: true,
+  });
+  arcText(ctx, EVENT.hashtag.toUpperCase(), 0, 0, textRadius, Math.PI / 2, {
+    font: font(600, r * 0.13, MONO, "ui-monospace, monospace"),
+    fill: withAlpha(palette.ink, 0.7),
+    letterSpacing: 2,
+    outward: false,
+  });
+
+  ctx.beginPath();
+  ctx.arc(0, 0, r * 0.3, 0, Math.PI * 2);
+  ctx.fillStyle = rampLinear(ctx, palette, 0, -r * 0.3, 0, r * 0.3);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+/**
  * Soft dark scrim behind text sitting over photography.
  *
  * Required, not decorative: the brief promises real photos, and without this

@@ -1,6 +1,7 @@
 import { DISPLAY, MONO, font } from "../fonts";
 import {
   EVENT,
+  cornerSeal,
   drawQr,
   emptyPrompt,
   label,
@@ -123,6 +124,7 @@ function drawPhotoPanel(
   ctx.restore();
 
   drawCornerTicks(ctx, M, PHOTO_Y, INNER, PHOTO_H);
+  cornerSeal(ctx, M + INNER - 130, PHOTO_Y + 130, 108, P);
 
   label(ctx, "VERIFIED BUILDER", M + 34, PHOTO_Y + PHOTO_H - 44, 22, {
     fill: P.mark,
