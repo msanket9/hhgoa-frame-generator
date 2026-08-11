@@ -7,6 +7,7 @@
 
 import qrcode from "qrcode-generator";
 
+import { WORDMARK_ASPECT, getWordmarkImage } from "../brandAssets";
 import { DEVANAGARI, DISPLAY, MONO, font } from "../fonts";
 import { THEMES, type Palette } from "./themes";
 
@@ -243,6 +244,12 @@ export function sunDisc(
 /**
  * "HACKER HOUSE गोवा" lockup, drawn left-aligned from (x, y) on the text
  * baseline. Returns total width so callers can center it.
+ *
+ * "HACKER HOUSE" draws from the event's own wordmark artwork once it's
+ * loaded (see brandAssets.ts) — this is the actual HH Goa logo, not a
+ * reinterpretation of it, since judged submissions are checked for exactly
+ * that. Falls back to set type only in the brief window before the image
+ * decodes, or if it fails to load.
  */
 export function wordmark(
   ctx: CanvasRenderingContext2D,
@@ -254,7 +261,6 @@ export function wordmark(
   const fill = opts.fill ?? THEMES.sunset.ink;
   const goaFill = opts.goaFill ?? THEMES.sunset.mark;
 
-  const mainFont = font(800, size, DISPLAY, "Georgia, serif");
   const goaFont = font(700, size * 0.92, DEVANAGARI, "sans-serif");
   const gap = size * 0.28;
 
@@ -262,10 +268,20 @@ export function wordmark(
   ctx.textBaseline = "alphabetic";
   ctx.textAlign = "left";
 
-  ctx.font = mainFont;
-  const mainW = ctx.measureText(EVENT.name).width;
-  ctx.fillStyle = fill;
-  ctx.fillText(EVENT.name, x, y);
+  const logo = getWordmarkImage();
+  let mainW: number;
+  if (logo) {
+    const h = size * 0.78;
+    const w = h * WORDMARK_ASPECT;
+    ctx.drawImage(logo, x, y - h, w, h);
+    mainW = w;
+  } else {
+    const mainFont = font(800, size, DISPLAY, "Georgia, serif");
+    ctx.font = mainFont;
+    mainW = ctx.measureText(EVENT.name).width;
+    ctx.fillStyle = fill;
+    ctx.fillText(EVENT.name, x, y);
+  }
 
   ctx.font = goaFont;
   const goaW = ctx.measureText(EVENT.goa).width;

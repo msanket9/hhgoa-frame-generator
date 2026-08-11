@@ -1,3 +1,4 @@
+import { loadBrandImages } from "../brandAssets";
 import { loadBrandFonts } from "../fonts";
 import { renderCard } from "./card";
 import { renderPfp } from "./pfp";
@@ -33,15 +34,15 @@ export function renderTo(
 }
 
 /**
- * Fonts must resolve before the first draw or the canvas bakes in a fallback
- * face permanently — canvas text, unlike DOM text, never re-flows when a font
- * arrives later.
+ * Fonts and the wordmark logo must resolve before the first draw or the
+ * canvas bakes in a fallback permanently — canvas drawing, unlike DOM
+ * content, never re-flows once painted.
  */
 export async function renderToAsync(
   canvas: HTMLCanvasElement | OffscreenCanvas,
   format: FormatId,
   state: RenderState,
 ): Promise<void> {
-  await loadBrandFonts();
+  await Promise.all([loadBrandFonts(), loadBrandImages()]);
   renderTo(canvas, format, state);
 }
