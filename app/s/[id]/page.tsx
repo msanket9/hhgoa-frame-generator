@@ -20,6 +20,9 @@ export const dynamic = "force-dynamic";
 type Frame = {
   name: string;
   title: string;
+  /** Missing on links shared before this field existed — treated as "pfp",
+   *  matching the only display those old links ever had. */
+  format?: "pfp" | "card";
   image: string;
   og: string;
   createdAt: number;
@@ -122,6 +125,11 @@ export default async function SharePage({
   if (!frame) notFound();
 
   const who = frame.name?.trim();
+  // The two formats have completely different shapes — a 1:1 avatar meant to
+  // be masked circular, and a 4:5 rectangular pass. Forcing both through the
+  // same rounded-full treatment is what mangled every builder-ID share into
+  // a cropped circle with the name spilling out below it.
+  const isCard = frame.format === "card";
 
   return (
     <main className="flex flex-1 flex-col overflow-x-hidden">
@@ -146,9 +154,13 @@ export default async function SharePage({
                 ? `${who}'s Hacker House Goa 2026 frame`
                 : "A Hacker House Goa 2026 frame"
             }
-            width={400}
-            height={400}
-            className="exhibit anim-pop delay-1 mt-8 w-full max-w-[380px] rounded-full"
+            width={isCard ? 324 : 400}
+            height={isCard ? 405 : 400}
+            className={
+              isCard
+                ? "exhibit anim-pop delay-1 mt-8 w-full max-w-[300px] rounded-[24px]"
+                : "exhibit anim-pop delay-1 mt-8 w-full max-w-[380px] rounded-full"
+            }
           />
 
           {/* With no name — the profile-frame path doesn't ask for one — the

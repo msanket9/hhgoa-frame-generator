@@ -217,6 +217,11 @@ export async function POST(request: Request) {
   const id = /^[A-Za-z0-9_-]{6,24}$/.test(requested) ? requested : nanoid(10);
   const name = sanitizeText(String(form.get("name") ?? ""), 60);
   const title = sanitizeText(String(form.get("title") ?? ""), 60);
+  // Determines how the share page displays the image (circular avatar vs.
+  // the rectangular pass) — an unrecognized value falls back to "pfp" rather
+  // than 400ing the whole upload over a cosmetic field.
+  const rawFormat = String(form.get("format") ?? "");
+  const format = rawFormat === "card" ? "card" : "pfp";
 
   try {
     const origin = new URL(request.url).origin;
@@ -257,6 +262,7 @@ export async function POST(request: Request) {
     const meta = JSON.stringify({
       name,
       title,
+      format,
       image: imageUrl,
       og: ogUrl,
       createdAt: Date.now(),

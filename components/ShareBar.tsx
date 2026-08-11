@@ -116,6 +116,7 @@ export default function ShareBar({
         id: shareId,
         name: details.name,
         title: details.title,
+        format,
       });
       const url = buildUrl(pageUrl);
 

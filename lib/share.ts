@@ -79,7 +79,7 @@ export type UploadResult = { id: string; pageUrl: string; imageUrl: string };
 export async function uploadForShare(
   image: Blob,
   ogImage: Blob,
-  meta: { id?: string; name?: string; title?: string },
+  meta: { id?: string; name?: string; title?: string; format?: string },
 ): Promise<UploadResult> {
   const body = new FormData();
   body.append("image", image, "image.jpg");
@@ -87,6 +87,10 @@ export async function uploadForShare(
   if (meta.id) body.append("id", meta.id);
   if (meta.name) body.append("name", meta.name);
   if (meta.title) body.append("title", meta.title);
+  // The share page needs this to know whether to mask the image into a
+  // circle (profile frame) or show it as the rectangular pass (builder ID) —
+  // without it, every shared card gets the wrong treatment.
+  if (meta.format) body.append("format", meta.format);
 
   const res = await fetch("/api/share", { method: "POST", body });
   if (!res.ok) {
