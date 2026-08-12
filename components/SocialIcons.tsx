@@ -20,16 +20,34 @@ export function XGlyph({ className }: { className?: string }) {
 export function WhatsAppGlyph({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 20 20" className={className} aria-hidden="true">
-      <path
-        d="M4 17 L4.9 13.4 A6.5 6.5 0 1 1 7.4 15.6 Z"
+      {/* Bubble sits slightly above (10,10) so the tail's weight below it
+          balances the icon's optical center — the other three glyphs are
+          all centered on the viewBox exactly, this one has to fake it. */}
+      <circle
+        cx="10"
+        cy="9.2"
+        r="6.3"
         fill="none"
         stroke="currentColor"
         strokeWidth="1.7"
-        strokeLinejoin="round"
       />
       <path
-        d="M7.7 7.8 C7.5 7.2 7.2 7.2 7 7.2 C6.7 7.2 6.4 7.4 6.2 7.7 C6 8 5.9 8.4 6.1 9 C6.4 9.9 7.1 10.9 7.9 11.6 C8.7 12.3 9.7 12.8 10.6 12.9 C11.1 13 11.5 12.8 11.8 12.5 C12 12.3 12.1 12 12 11.8 C11.9 11.5 11.3 11.1 11 11 C10.8 10.9 10.6 10.9 10.4 11.1 C10.3 11.2 10.1 11.4 10 11.5 C9.9 11.6 9.7 11.6 9.5 11.5 C9 11.3 8.5 10.9 8.1 10.5 C7.7 10.1 7.4 9.6 7.2 9.1 C7.1 8.9 7.1 8.7 7.2 8.6 C7.3 8.5 7.5 8.3 7.6 8.2 C7.7 8 7.8 7.9 7.7 7.8 Z"
+        d="M6.9 14.6 L5.1 17.3 L8.7 15.3 Z"
         fill="currentColor"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinejoin="round"
+      />
+      {/* Handset: a rounded bar rotated to a diagonal, centered on the same
+          point as the bubble by construction rather than eyeballed. */}
+      <rect
+        x="8.8"
+        y="5.9"
+        width="2.4"
+        height="6.6"
+        rx="1.2"
+        fill="currentColor"
+        transform="rotate(45 10 9.2)"
       />
     </svg>
   );
